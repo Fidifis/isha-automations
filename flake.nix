@@ -18,6 +18,7 @@
             pulumiPackages.pulumi-language-nodejs
             nodejs
             go
+            dotnet-sdk
           ];
         };
       }

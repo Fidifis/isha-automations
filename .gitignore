@@ -1,3 +1,5 @@
 .direnv
-/pulumi/bin/
-/pulumi/node_modules/
+bin/
+node_modules/
+
+obj
