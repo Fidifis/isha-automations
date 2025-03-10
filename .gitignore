@@ -1,0 +1,3 @@
+.direnv
+/pulumi/bin/
+/pulumi/node_modules/
