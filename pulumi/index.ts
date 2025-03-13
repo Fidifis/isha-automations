@@ -13,25 +13,43 @@ const assumeRole = aws.iam.getPolicyDocument({
         actions: ["sts:AssumeRole"],
     }],
 });
+const policy = JSON.stringify({
+        Version: "2012-10-17",
+        Statement: {
+          Effect: "Allow",
+          Action: [
+            "logs:CreateLogStream",
+            "logs:PutLogEvents",
+            "logs:CreateLogGroup",
+          ],
+          Resource: [
+                "arn:aws:logs:eu-north-1:956941652442:log-group:/aws/lambda/*"
+            ]
+        }
+    });
 const iamForLambda = new aws.iam.Role("iam_for_lambda", {
     name: "iam_for_lambda",
     assumeRolePolicy: assumeRole.then(assumeRole => assumeRole.json),
+    inlinePolicies: [
+    {
+      name: "ano",
+      policy: policy
+    }
+  ]
 });
 
-const testLambda = new aws.lambda.Function("test_lambda", {
+const dmqLambda = new aws.lambda.Function("test_lambda", {
     code: new FileArchive('../code/bin/package.zip'),
-    name: "lambda_function_name",
+    name: "DMQMaker",
     role: iamForLambda.arn,
-    handler: "maker",
+    handler: "Lambda",
     runtime: aws.lambda.Runtime.Dotnet8,
 });
-// A REST API to route requests to HTML content and the Lambda function
-//const api = new apigateway.RestAPI("api", {
-//    routes: [
-//        { path: "/", localPath: "www"},
-//        { path: "/date", method: "GET", eventHandler: fn },
-//    ]
-//});
-//
-// The URL at which the REST API will be served.
-//export const url = api.url;
+
+const api = new apigateway.RestAPI("api", {
+    routes: [
+        { path: "/unstable/v1/make", method: "POST", eventHandler: dmqLambda },
+    ]
+});
+
+export const url = api.url;
