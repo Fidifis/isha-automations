@@ -3,9 +3,9 @@ import * as apigateway from "@pulumi/aws-apigateway";
 import { MakerLambda } from "./makerLambda"
 
 async function main() {
-  const identity = await aws.getCallerIdentity({});
+  //const identity = await aws.getCallerIdentity({});
 
-  const makerLambda = new MakerLambda(identity.accountId);
+  const makerLambda = new MakerLambda();
 
   new apigateway.RestAPI("api", {
     routes: [
