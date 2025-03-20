@@ -1,11 +1,17 @@
 import * as aws from "@pulumi/aws";
 import * as apigateway from "@pulumi/aws-apigateway";
-import { makerLambda } from "./makerLambda"
+import { MakerLambda } from "./makerLambda"
 
-const identity = aws.getCallerIdentity({}).then((x) => x);
+async function main() {
+  const identity = await aws.getCallerIdentity({});
 
-const api = new apigateway.RestAPI("api", {
-  routes: [
-    { path: "/unstable/v1/make", method: "POST", eventHandler: makerLambda },
-  ],
-});
+  const makerLambda = new MakerLambda(identity.accountId);
+
+  new apigateway.RestAPI("api", {
+    routes: [
+      { path: "/unstable/v1/make", method: "POST", eventHandler: makerLambda.lambda },
+    ],
+  });
+}
+
+main();
