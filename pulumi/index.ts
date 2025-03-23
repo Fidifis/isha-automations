@@ -5,7 +5,11 @@ import { MakerLambda } from "./makerLambda"
 async function main() {
   //const identity = await aws.getCallerIdentity({});
 
-  const makerLambda = new MakerLambda();
+  const codeBucket = new aws.s3.BucketV2("code_bucket", {
+      bucket: "fidifis-isha-lambda-code",
+  });
+
+  const makerLambda = new MakerLambda(codeBucket);
 
   new apigateway.RestAPI("api", {
     routes: [

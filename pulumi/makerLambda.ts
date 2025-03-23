@@ -4,7 +4,7 @@ import { FileArchive } from "@pulumi/pulumi/asset";
 export class MakerLambda {
   public readonly lambda: aws.lambda.Function;
 
-  constructor() {
+  constructor(s3Bucket: aws.s3.BucketV2) {
     const lambdaName = "DMQMaker";
 
     const logGroup = new aws.cloudwatch.LogGroup("dmq_log_group", {
@@ -26,29 +26,33 @@ export class MakerLambda {
         },
       ],
     });
-    const policy = logGroup.arn.apply((logGroupArn) => aws.iam.getPolicyDocument({
-      statements: [
-        {
-          effect: "Allow",
-          actions: ["logs:CreateLogStream", "logs:PutLogEvents"],
-          resources: [ logGroupArn ],
-        },
-      ],
-    }));
+    const policy = logGroup.arn.apply((logGroupArn) =>
+      aws.iam.getPolicyDocument({
+        statements: [
+          {
+            effect: "Allow",
+            actions: ["logs:CreateLogStream", "logs:PutLogEvents"],
+            resources: [logGroupArn, `${logGroupArn}:*`],
+          },
+        ],
+      }),
+    );
     const execRole = new aws.iam.Role("dmq_maker_exec", {
       name: "DMQMaker-exec",
       assumeRolePolicy: assumeLambda.then((assumeRole) => assumeRole.json),
       inlinePolicies: [
         {
-          name: "ano",
-          policy: policy.apply(x => x.json)
+          name: "CloudWatch-logging",
+          policy: policy.apply((x) => x.json),
         },
       ],
     });
 
     this.lambda = new aws.lambda.Function("dmq_maker_lambda", {
-      code: new FileArchive("../code/bin/package.zip"),
-      name:lambdaName,
+      //code: new FileArchive("../code/bin/package.zip"),
+      s3Bucket: s3Bucket.id,
+      s3Key: "dmq-maker.zip",
+      name: lambdaName,
       role: execRole.arn,
       handler: "Lambda",
       runtime: aws.lambda.Runtime.Dotnet8,
