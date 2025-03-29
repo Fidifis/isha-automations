@@ -54,6 +54,7 @@ export class MakerLambda {
       s3Key: "dmq-maker.zip",
       name: lambdaName,
       role: execRole.arn,
+      reservedConcurrentExecutions: 5,
       handler: "Lambda",
       runtime: aws.lambda.Runtime.Dotnet8,
       timeout: 30,
