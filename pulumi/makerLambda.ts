@@ -1,5 +1,4 @@
 import * as aws from "@pulumi/aws";
-import { FileArchive } from "@pulumi/pulumi/asset";
 
 export class MakerLambda {
   public readonly lambda: aws.lambda.Function;
@@ -43,7 +42,7 @@ export class MakerLambda {
       inlinePolicies: [
         {
           name: "CloudWatch-logging",
-          policy: policy.apply((x) => x.json),
+          policy: policy.json,
         },
       ],
     });
