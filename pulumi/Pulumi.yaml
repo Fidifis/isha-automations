@@ -8,3 +8,7 @@ config:
   pulumi:tags:
     value:
       pulumi:template: serverless-aws-typescript
+
+  pulumi:autonaming:
+    value:
+      pattern: ${project}-${stack}-${name}

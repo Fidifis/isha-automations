@@ -35,7 +35,7 @@ export const bucketSecureTransportPolicy = (arn: string) =>
           {
             test: "NumericLessThan",
             variable: "s3:TlsVersion",
-            values: ["1.1"],
+            values: ["1.2"],
           },
         ],
       },
