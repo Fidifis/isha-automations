@@ -1,0 +1,4 @@
+encryptionsalt: v1:05brnn3dAGg=:v1:2rQbM6sb1pad0wGD:vetAVJxEyY16NsYHWS/8r9JR+I7VWw==
+config:
+  aws:profile: fidifis-isha-automations
+  aws:region: eu-north-1
