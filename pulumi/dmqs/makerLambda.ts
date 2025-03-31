@@ -9,7 +9,7 @@ export class DmqMakerLambda extends pulumi.ComponentResource {
     args: { codeBucket: aws.s3.BucketV2 },
     opts?: pulumi.ComponentResourceOptions,
   ) {
-    super("fidifis:automations:MakerLambda", name, {}, opts);
+    super("fidifis:components:MakerLambda", name, {}, opts);
 
     const lambdaName = `${pulumi.getProject()}-${pulumi.getStack()}-${name}`;
 

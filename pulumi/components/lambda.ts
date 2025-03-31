@@ -1,10 +1,14 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
-import * as lambdaBuilders from "@pulumi/lambda-builders";
+// import * as lambdaBuilders from "@pulumi/lambda-builders";
 import { Input } from "@pulumi/pulumi";
 
 export interface GoLambdaProps {
-  code: Input<string>;
+  source: {
+    code?: Input<string>;
+    s3Key?: Input<string>;
+    s3Bucket?: aws.s3.BucketV2;
+  }
   name?: Input<string>;
   timeout?: Input<number>;
   memory?: Input<number>;
@@ -77,15 +81,18 @@ export class GoLambda extends pulumi.ComponentResource {
       { parent: this },
     );
 
-    const builder = lambdaBuilders.buildGoOutput({
-      code: args.code,
-      architecture: args.architecture,
-    }, {parent: this})
+    // const builder = lambdaBuilders.buildGoOutput({
+    //   code: args.code,
+    //   architecture: args.architecture,
+    // }, {parent: this})
 
     this.lambda = new aws.lambda.Function(
       `${name}-Lambda`,
       {
-        code: builder.asset,
+        // code: builder.asset,
+        code: args.source.code,
+        s3Bucket: args.source.s3Bucket?.id,
+        s3Key: args.source.s3Key,
         name: lambdaName,
         role: this.role.arn,
         reservedConcurrentExecutions: args.reservedConcurrency,

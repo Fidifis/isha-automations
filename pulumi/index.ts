@@ -12,7 +12,10 @@ async function main() {
   utils.addS3BasicRules("LambdaCodeRules", codeBucket);
   
   const apiAuthorizer = new GoLambda("ApiAuthorizer", {
-    code: "../code/receive_dmq"
+    source: {
+      s3Bucket: codeBucket,
+      s3Key: "authorizer.zip"
+    }
   })
 
   new DMQs("DMQs", { codeBucket });
