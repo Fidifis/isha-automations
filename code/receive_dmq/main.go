@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"time"
   "log"
   "encoding/json"
@@ -12,7 +11,6 @@ import (
   "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-  "github.com/google/uuid"
 )
 var (
 	s3c *s3.Client

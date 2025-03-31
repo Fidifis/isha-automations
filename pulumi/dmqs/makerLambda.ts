@@ -9,7 +9,7 @@ export class DmqMakerLambda extends pulumi.ComponentResource {
     args: { codeBucket: aws.s3.BucketV2 },
     opts?: pulumi.ComponentResourceOptions,
   ) {
-    super("pkg:index:MakerLambda", name, {}, opts);
+    super("fidifis:automations:MakerLambda", name, {}, opts);
 
     const lambdaName = `${pulumi.getProject()}-${pulumi.getStack()}-${name}`;
 
@@ -22,7 +22,7 @@ export class DmqMakerLambda extends pulumi.ComponentResource {
       { parent: this },
     );
 
-    const assumeLambda = aws.iam.getPolicyDocument({
+    const assumeLambda = aws.iam.getPolicyDocumentOutput({
       statements: [
         {
           effect: "Allow",
@@ -35,22 +35,20 @@ export class DmqMakerLambda extends pulumi.ComponentResource {
           actions: ["sts:AssumeRole"],
         },
       ],
-    });
-    const policy = logGroup.arn.apply((logGroupArn) =>
-      aws.iam.getPolicyDocument({
-        statements: [
-          {
-            effect: "Allow",
-            actions: ["logs:CreateLogStream", "logs:PutLogEvents"],
-            resources: [logGroupArn, `${logGroupArn}:*`],
-          },
-        ],
-      }),
-    );
+    },{parent: this});
+    const policy = aws.iam.getPolicyDocumentOutput({
+      statements: [
+        {
+          effect: "Allow",
+          actions: ["logs:CreateLogStream", "logs:PutLogEvents"],
+          resources: [logGroup.arn, `${logGroup.arn}:*`],
+        },
+      ],
+    },{parent: this});
     const execRole = new aws.iam.Role(
       `${name}-ExecRole`,
       {
-        assumeRolePolicy: assumeLambda.then((assumeRole) => assumeRole.json),
+        assumeRolePolicy: assumeLambda.json,
         inlinePolicies: [
           {
             name: "CloudWatch-logging",
