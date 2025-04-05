@@ -38,7 +38,7 @@ export class GoLambda extends pulumi.ComponentResource {
       `${name}-Log`,
       {
         name: `/aws/lambda/${lambdaName}`,
-        retentionInDays: 30,
+        retentionInDays: args.logs?.retention ?? 30,
       },
       { parent: this },
     );
