@@ -10,6 +10,7 @@ export interface GoLambdaProps {
     s3Bucket?: aws.s3.BucketV2;
   }
   name?: Input<string>;
+  handler?: Input<string>;
   timeout?: Input<number>;
   memory?: Input<number>;
   architecture?: Input<string>;
@@ -96,7 +97,7 @@ export class GoLambda extends pulumi.ComponentResource {
         name: lambdaName,
         role: this.role.arn,
         reservedConcurrentExecutions: args.reservedConcurrency,
-        handler: "lambda",
+        handler: args.handler ?? "lambda",
         runtime: aws.lambda.Runtime.CustomAL2023,
         timeout: args.timeout,
         memorySize: args.memory,
