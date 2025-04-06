@@ -32,8 +32,8 @@ export default class ApiAccess extends pulumi.ComponentResource {
             {
               actions: ["ssm:GetParametersByPath"],
               resources: [
-                `arn:aws:ssm:${args.meta.region}:${args.meta.accountId}:parameter/isha/auth`,
-                `arn:aws:ssm:${args.meta.region}:${args.meta.accountId}:parameter/isha/auth/*`,
+                `arn:aws:ssm:${args.meta.region}:${args.meta.accountId}:parameter/isha/auth/${pulumi.getStack()}`,
+                `arn:aws:ssm:${args.meta.region}:${args.meta.accountId}:parameter/isha/auth/${pulumi.getStack()}/*`,
               ],
             },
           ],
@@ -52,7 +52,7 @@ export default class ApiAccess extends pulumi.ComponentResource {
         logs: { retention: 14 },
         env: {
           variables: {
-            SSM_LOOKUP_PATH: "/isha/auth",
+            SSM_LOOKUP_PATH: `/isha/auth/${pulumi.getStack()}`,
           },
         },
         roleInlinePolicies: [lambdaPolicy],
@@ -83,7 +83,7 @@ export default class ApiAccess extends pulumi.ComponentResource {
     return new aws.ssm.Parameter(
       name,
       {
-        name: `/isha/auth/${keyPath}`,
+        name: `/isha/auth/${pulumi.getStack()}/${keyPath}`,
         description: `API key for ${keyPath} team`,
         type: aws.ssm.ParameterType.SecureString,
         value: password.result,
