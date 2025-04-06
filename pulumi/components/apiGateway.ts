@@ -128,6 +128,20 @@ export default class ApiGatewayV2 extends pulumi.ComponentResource {
         { parent: this },
       );
       this.permissions.push(permission);
+
+      const authorizerPermission = route.authorizer ?new aws.lambda.Permission(
+        `${name}-authPermission-${index}`,
+        {
+          action: "lambda:InvokeFunction",
+          function: route.authorizer.name,
+          principal: "apigateway.amazonaws.com",
+          sourceArn: pulumi.interpolate`${this.apiGateway.executionArn}/*`,
+        },
+        { parent: this },
+      ):null;
+      if (authorizerPermission) {
+        this.permissions.push(authorizerPermission);
+      }
     });
 
     this.registerOutputs({

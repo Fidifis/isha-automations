@@ -56,6 +56,7 @@ export default class ApiAccess extends pulumi.ComponentResource {
           },
         },
         roleInlinePolicies: [lambdaPolicy],
+        reservedConcurrency: 20,
       },
       { parent: this },
     );
