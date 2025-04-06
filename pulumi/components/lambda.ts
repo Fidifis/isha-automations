@@ -19,6 +19,7 @@ export interface GoLambdaProps {
     retention?: Input<number>;
   };
   roleInlinePolicies?: Input<aws.types.input.iam.RoleInlinePolicy>[];
+  env?: Input<aws.types.input.lambda.FunctionEnvironment>;
 }
 
 export class GoLambda extends pulumi.ComponentResource {
@@ -101,7 +102,8 @@ export class GoLambda extends pulumi.ComponentResource {
         runtime: aws.lambda.Runtime.CustomAL2023,
         timeout: args.timeout,
         memorySize: args.memory,
-        architectures: args.architecture ? [args.architecture] : undefined
+        architectures: args.architecture ? [args.architecture] : undefined,
+        environment: args.env,
       },
       { parent: this },
     );

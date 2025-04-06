@@ -27,7 +27,7 @@ export interface ApiGatewayV2Props {
   tags?: { [key: string]: Input<string> };
 }
 
-export class ApiGatewayV2 extends pulumi.ComponentResource {
+export default class ApiGatewayV2 extends pulumi.ComponentResource {
   public readonly apiGateway: aws.apigatewayv2.Api;
   public readonly stage: aws.apigatewayv2.Stage;
   public readonly integrations: aws.apigatewayv2.Integration[] = [];
@@ -80,7 +80,7 @@ export class ApiGatewayV2 extends pulumi.ComponentResource {
         {
           apiId: this.apiGateway.id,
           integrationType: "AWS_PROXY",
-          integrationMethod: route.method,
+          integrationMethod: route.method ?? "GET",
           integrationUri: route.eventHandler.invokeArn,
           payloadFormatVersion: route.payloadFormatVersion ?? "2.0",
         },
@@ -108,7 +108,7 @@ export class ApiGatewayV2 extends pulumi.ComponentResource {
           routeKey:
             route.path === "$default"
               ? route.path
-              : `${route.method} ${route.path}`,
+              : `${route.method ?? "GET"} ${route.path}`,
           target: pulumi.interpolate`integrations/${integration.id}`,
           authorizationType: route.authorizer ? "CUSTOM" : "NONE",
           authorizerId: authorizer?.id,

@@ -1,7 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
-import * as apigateway from "@pulumi/aws-apigateway";
 import { DmqMakerLambda } from "./makerLambda";
+import ApigatewayV2 from "../components/apiGateway";
 
 export class DMQs extends pulumi.ComponentResource {
   constructor(
@@ -17,19 +17,29 @@ export class DMQs extends pulumi.ComponentResource {
       { parent: this },
     );
 
-    new apigateway.RestAPI(
-      `${name}-Api`,
-      {
-        routes: [
-          {
-            path: "/unstable/v1/make",
-            method: "POST",
-            eventHandler: makerLambda.lambda,
-          },
-        ],
-      },
-      { parent: this },
-    );
+    new ApigatewayV2(`${name}-Api`, {
+      routes: [
+        {
+          path: "/unstable/v1/make",
+          method: "POST",
+          eventHandler: makerLambda.lambda,
+        }
+      ]
+    }, {parent:this})
+
+    // new apigateway.RestAPI(
+    //   `${name}-Api`,
+    //   {
+    //     routes: [
+    //       {
+    //         path: "/unstable/v1/make",
+    //         method: "POST",
+    //         eventHandler: makerLambda.lambda,
+    //       },
+    //     ],
+    //   },
+    //   { parent: this },
+    // );
 
     this.registerOutputs();
   }

@@ -2,7 +2,7 @@ import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import { DMQs } from "./dmqs";
 import * as utils from "./utils";
-import { GoLambda } from "./components/lambda";
+import ApiAccess from "./apiAccess";
 
 async function main() {
   const codeBucket = new aws.s3.BucketV2("LambdaCode", {
@@ -10,13 +10,9 @@ async function main() {
   });
   utils.addS3BasicRules("LambdaCodeRules", codeBucket);
 
-  const apiAuthorizer = new GoLambda("ApiAuthorizer", {
-    source: {
-      s3Bucket: codeBucket,
-      s3Key: "authorizer.zip",
-    },
-    handler: "authorizer",
-    logs: { retention: 14 },
+  const authApiLambda = new ApiAccess("ApiAuthorizerPSK", {
+    codeBucket,
+    keys: ["GR/cz"],
   });
 
   new DMQs("DMQs", { codeBucket });
