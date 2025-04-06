@@ -94,6 +94,7 @@ func validate(key string) bool {
 		return false
 	}
 	v, ok := cachedKeys[splited[0]]
+	log.Info("Presented auth key for: ", splited[0])
 	return ok && v == splited[1]
 }
 
