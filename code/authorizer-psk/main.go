@@ -32,6 +32,7 @@ func getSSMPath() string {
 }
 
 func getParameters(ssmPath string) (map[string]string, error) {
+	// TODO: handle nextToken
 	response, err := ssmc.GetParametersByPath(context.Background(), &ssm.GetParametersByPathInput{
 		WithDecryption: aws.Bool(true),
 		Path: aws.String(ssmPath),

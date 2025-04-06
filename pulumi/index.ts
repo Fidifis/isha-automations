@@ -5,6 +5,11 @@ import * as utils from "./utils";
 import ApiAccess from "./apiAccess";
 
 async function main() {
+  const meta = {
+    accountId: (await aws.getCallerIdentity({})).accountId,
+    region: (await aws.getRegion()).id,
+  };
+
   const codeBucket = new aws.s3.BucketV2("LambdaCode", {
     bucket: `${pulumi.getProject()}-${pulumi.getStack()}-lambda-code`,
   });
@@ -13,6 +18,7 @@ async function main() {
   const authApiLambda = new ApiAccess("ApiAuthorizerPSK", {
     codeBucket,
     keys: ["GR/cz"],
+    meta,
   });
 
   new DMQs("DMQs", { codeBucket });

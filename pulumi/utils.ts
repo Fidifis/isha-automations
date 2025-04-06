@@ -1,5 +1,10 @@
 import * as aws from "@pulumi/aws";
 
+export interface MetaProps {
+  accountId: string;
+  region: string;
+}
+
 export const bucketSecureTransportPolicy = (arn: string) =>
   aws.iam.getPolicyDocument({
     statements: [

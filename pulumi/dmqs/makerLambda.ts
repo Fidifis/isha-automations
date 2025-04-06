@@ -19,7 +19,7 @@ export class DmqMakerLambda extends pulumi.ComponentResource {
         name: `/aws/lambda/${lambdaName}`,
         retentionInDays: 30,
       },
-      { parent: this },
+      { parent: this, deleteBeforeReplace: true },
     );
 
     const assumeLambda = aws.iam.getPolicyDocumentOutput({
@@ -41,7 +41,7 @@ export class DmqMakerLambda extends pulumi.ComponentResource {
         {
           effect: "Allow",
           actions: ["logs:CreateLogStream", "logs:PutLogEvents"],
-          resources: [logGroup.arn, `${logGroup.arn}:*`],
+          resources: [logGroup.arn, pulumi.interpolate`${logGroup.arn}:*`],
         },
       ],
     },{parent: this});
@@ -72,7 +72,7 @@ export class DmqMakerLambda extends pulumi.ComponentResource {
         timeout: 30,
         memorySize: 512,
       },
-      { parent: this },
+      { parent: this, deleteBeforeReplace: true },
     );
 
     this.registerOutputs({

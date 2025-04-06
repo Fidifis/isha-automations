@@ -3,6 +3,11 @@ import * as aws from "@pulumi/aws";
 // import * as lambdaBuilders from "@pulumi/lambda-builders";
 import { Input } from "@pulumi/pulumi";
 
+export enum Arch {
+  x86 = "X8664",
+  arm = "arm64",
+}
+
 export interface GoLambdaProps {
   source: {
     code?: Input<string>;
@@ -13,7 +18,7 @@ export interface GoLambdaProps {
   handler?: Input<string>;
   timeout?: Input<number>;
   memory?: Input<number>;
-  architecture?: Input<string>;
+  architecture?: Arch;
   reservedConcurrency?: Input<number>;
   logs?: {
     retention?: Input<number>;
@@ -42,7 +47,7 @@ export class GoLambda extends pulumi.ComponentResource {
         name: `/aws/lambda/${lambdaName}`,
         retentionInDays: args.logs?.retention ?? 30,
       },
-      { parent: this },
+      { parent: this, deleteBeforeReplace: true },
     );
 
     const assumeLambda = aws.iam.getPolicyDocumentOutput({
@@ -62,9 +67,8 @@ export class GoLambda extends pulumi.ComponentResource {
     const policy = aws.iam.getPolicyDocumentOutput({
       statements: [
         {
-          effect: "Allow",
           actions: ["logs:CreateLogStream", "logs:PutLogEvents"],
-          resources: [this.logGroup.arn, `${this.logGroup.arn}:*`],
+          resources: [this.logGroup.arn, pulumi.interpolate`${this.logGroup.arn}:*`],
         },
       ],
     }, {parent: this});
@@ -105,7 +109,7 @@ export class GoLambda extends pulumi.ComponentResource {
         architectures: args.architecture ? [args.architecture] : undefined,
         environment: args.env,
       },
-      { parent: this },
+      { parent: this, deleteBeforeReplace: true },
     );
 
     this.registerOutputs({
