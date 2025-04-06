@@ -15,6 +15,7 @@ async function main() {
       s3Bucket: codeBucket,
       s3Key: "authorizer.zip",
     },
+    handler: "authorizer",
     logs: { retention: 14 },
   });
 
