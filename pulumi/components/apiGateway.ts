@@ -67,7 +67,7 @@ export default class ApiGatewayV2 extends pulumi.ComponentResource {
       `${name}-Stage`,
       {
         apiId: this.apiGateway.id,
-        name: args.stage?.name,
+        name: args.stage?.name ?? "$default",
         autoDeploy: args.stage?.autoDeployEnabled ?? true,
         tags: args.tags,
       },
@@ -94,6 +94,8 @@ export default class ApiGatewayV2 extends pulumi.ComponentResource {
           apiId: this.apiGateway.id,
           authorizerType: "REQUEST",
           authorizerUri: route.authorizer.invokeArn,
+          authorizerPayloadFormatVersion: "2.0",
+          enableSimpleResponses: true,
         },
         { parent: this },
       ) : null;

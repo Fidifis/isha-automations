@@ -32,6 +32,7 @@ export default class ApiAccess extends pulumi.ComponentResource {
             {
               actions: ["ssm:GetParametersByPath"],
               resources: [
+                `arn:aws:ssm:${args.meta.region}:${args.meta.accountId}:parameter/isha/auth`,
                 `arn:aws:ssm:${args.meta.region}:${args.meta.accountId}:parameter/isha/auth/*`,
               ],
             },
@@ -47,7 +48,6 @@ export default class ApiAccess extends pulumi.ComponentResource {
           s3Bucket: args.codeBucket,
           s3Key: "authorizer-psk.zip",
         },
-        handler: "authorizer-psk",
         architecture: Arch.arm,
         logs: { retention: 14 },
         env: {

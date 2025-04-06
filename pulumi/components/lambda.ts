@@ -102,7 +102,7 @@ export class GoLambda extends pulumi.ComponentResource {
         name: lambdaName,
         role: this.role.arn,
         reservedConcurrentExecutions: args.reservedConcurrency,
-        handler: args.handler ?? "lambda",
+        handler: args.handler ?? "bootstrap",
         runtime: aws.lambda.Runtime.CustomAL2023,
         timeout: args.timeout,
         memorySize: args.memory,

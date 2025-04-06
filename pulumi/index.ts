@@ -15,13 +15,13 @@ async function main() {
   });
   utils.addS3BasicRules("LambdaCodeRules", codeBucket);
 
-  const authApiLambda = new ApiAccess("ApiAuthorizerPSK", {
+  const apiAccessRes = new ApiAccess("ApiAuthorizerPSK", {
     codeBucket,
     keys: ["GR/cz"],
     meta,
   });
 
-  new DMQs("DMQs", { codeBucket });
+  new DMQs("DMQs", { codeBucket, apiAuthorizer: apiAccessRes.apiAuthorizer });
 }
 
 main();

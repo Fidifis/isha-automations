@@ -5,7 +5,7 @@ echo "Running Lambda build..."
 
 workdir=${PWD}
 
-mkdir -p "/tmp/build"
+mkdir -p /tmp/build
 
 cd "$workdir/code"
 
@@ -16,10 +16,13 @@ for lambda_dir in */; do
     fi
     lambda_name="${lambda_dir%/}"
     echo "Building $lambda_name..."
-
     cd "$workdir/code/$lambda_name"
-    GOOS=linux GOARCH=arm64 go build -o "/tmp/build/$lambda_name"
-    zip -jq "$workdir/bin/$lambda_name.zip" "/tmp/build/$lambda_name"
+
+    GOOS=linux GOARCH=arm64 go build -o /tmp/build/bootstrap
+
+    rm "$workdir/bin/$lambda_name.zip"
+    zip -jq "$workdir/bin/$lambda_name.zip" /tmp/build/bootstrap
+    rm /tmp/build/bootstrap
 
     cd "$workdir/code"
 done
