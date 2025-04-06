@@ -15,38 +15,37 @@
           config.allowUnfree = true;
         };
 
-        buildZippedGoBinary = name: srcPath: pkgs.buildGoModule {
-          pname = "${name}";
-          version = "1.0.0";
-          src = ./code/${srcPath};
-
-          vendorHash = "sha256-829Coow/8VuIU6V37IBld8WWvtEIvK0VpWldgWJH1jA=";
-
-          nativeBuildInputs = [ pkgs.zip ];
-          postInstall = ''
-            mkdir -p $out/lib
-            zip -j $out/lib/${name}.zip $out/bin/*
-          '';
-          
-        };
-      in rec
+        # buildZippedGoBinary = name: srcPath: pkgs.buildGoModule {
+        #   pname = "${name}";
+        #   version = "1.0.0";
+        #   src = ./code/${srcPath};
+        #
+        #   vendorHash = "sha256-829Coow/8VuIU6V37IBld8WWvtEIvK0VpWldgWJH1jA=";
+        #
+        #   nativeBuildInputs = [ pkgs.zip ];
+        #   postInstall = ''
+        #     mkdir -p $out/lib
+        #     zip -j $out/lib/${name}.zip $out/bin/*
+        #   '';
+        #
+        # };
+      in #rec
       {
-        packages = {
-          authorizerLambda = buildZippedGoBinary "authorizer" "authorizer";
-
-          default = pkgs.stdenv.mkDerivation {
-            pname = "isha-lambda-pack";
-            version = "1.0.0";
-
-            dontUnpack = true;
-
-            installPhase = ''
-              mkdir -p $out
-              cp ${packages.authorizerLambda}/lib/authorizer.zip $out/
-            '';
-          };
-
-        };
+        # packages = {
+        #   authorizerLambda = buildZippedGoBinary "authorizer" "authorizer";
+        #
+        #   lambda = pkgs.stdenv.mkDerivation {
+        #     pname = "isha-lambda-pack";
+        #     version = "1.0.0";
+        #
+        #     dontUnpack = true;
+        #
+        #     installPhase = ''
+        #       mkdir -p $out
+        #       cp ${packages.authorizerLambda}/lib/authorizer.zip $out/
+        #     '';
+        #   };
+        # };
 
         # This is how to do formatter, but I don't like the style
         # formatter = pkgs.nixfmt-rfc-style;
