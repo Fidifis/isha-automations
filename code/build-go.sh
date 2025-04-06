@@ -18,7 +18,8 @@ for lambda_dir in */; do
     echo "Building $lambda_name..."
     cd "$workdir/code/$lambda_name"
 
-    GOOS=linux GOARCH=arm64 go build -o /tmp/build/bootstrap
+    GOOS=linux GOARCH=arm64 CGO_ENABLED=0 \
+      go build -ldflags="-s -w" -o /tmp/build/bootstrap
 
     rm "$workdir/bin/$lambda_name.zip"
     zip -jq "$workdir/bin/$lambda_name.zip" /tmp/build/bootstrap

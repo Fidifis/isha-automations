@@ -75,7 +75,7 @@ export default class ApiAccess extends pulumi.ComponentResource {
       {
         length: 32,
         special: true,
-        overrideSpecial: "$-_.+!*'();/?:@=&",
+        overrideSpecial: "-_.+!*'();/?@=&",
       },
       { parent: this },
     );
