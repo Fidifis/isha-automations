@@ -37,7 +37,7 @@ export class GoLambda extends pulumi.ComponentResource {
     args: GoLambdaProps,
     opts?: pulumi.ComponentResourceOptions,
   ) {
-    super("fidifis:automations:MakerLambda", name, {}, opts);
+    super("fidifis:aws:LambdaGo", name, {}, opts);
 
     const lambdaName = `${pulumi.getProject()}-${pulumi.getStack()}-${args.name ?? name}`;
 
