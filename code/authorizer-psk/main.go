@@ -86,27 +86,22 @@ func init() {
 	}
 }
 
-// Expected key is /GR/cz:12345
-func validate(key string) bool {
-	splited := strings.Split(key, ":")
-	if len(splited) != 2 {
-		log.Error("Invalid authorization key. Has incorrect number of `:`, expected 1. ", key)
-		return false
-	}
-	v, ok := cachedKeys[splited[0]]
-	log.Info("Presented auth key for: ", splited[0])
-	return ok && v == splited[1]
+func validate(keyId string, key string) bool {
+	log.Info("Presented auth key for: ", keyId)
+	v, ok := cachedKeys[keyId]
+	return ok && v == key
 }
 
 func HandleRequest(ctx context.Context, event events.APIGatewayV2CustomAuthorizerV2Request) (events.APIGatewayV2CustomAuthorizerSimpleResponse, error) {
-	key, ok := event.Headers["x-auth-key"]
+	keyId, okId := event.Headers["x-auth-id"]
+	key, okKey := event.Headers["x-auth-key"]
 
 	var valid bool
-	if ok {
-		valid = validate(key)
+	if okId && okKey {
+		valid = validate(keyId, key)
 	} else {
 		valid = false
-		log.Info("request doesn't have expected header")
+		log.Info("request doesn't have expected headers")
 	}
 
 	log.Info("request validity: ", valid)

@@ -36,21 +36,5 @@ export class DMQs extends pulumi.ComponentResource {
       },
       { parent: this },
     );
-
-    // new apigateway.RestAPI(
-    //   `${name}-Api`,
-    //   {
-    //     routes: [
-    //       {
-    //         path: "/unstable/v1/make",
-    //         method: "POST",
-    //         eventHandler: makerLambda.lambda,
-    //       },
-    //     ],
-    //   },
-    //   { parent: this },
-    // );
-
-    this.registerOutputs();
   }
 }

@@ -15,6 +15,17 @@ async function main() {
   });
   utils.addS3BasicRules("LambdaCodeRules", codeBucket);
 
+  new aws.ssm.Parameter(
+    "GCPAccessToken",
+    {
+      name: `/isha/gcpkeys/access`,
+      description: `service account`,
+      type: aws.ssm.ParameterType.SecureString,
+      value: "replace me",
+    },
+    { ignoreChanges: ["value"] },
+  );
+
   const apiAccessRes = new ApiAccess("ApiAuthorizerPSK", {
     codeBucket,
     keys: ["GR/cz"],
