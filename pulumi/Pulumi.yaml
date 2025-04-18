@@ -11,4 +11,4 @@ config:
 
   pulumi:autonaming:
     value:
-      pattern: ${project}-${stack}-${name}
+      pattern: ${project}-${stack}-${name}-${alphanum(5)}
