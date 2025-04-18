@@ -47,7 +47,7 @@ export class GoLambda extends pulumi.ComponentResource {
         name: `/aws/lambda/${lambdaName}`,
         retentionInDays: args.logs?.retention ?? 30,
       },
-      { parent: this, deleteBeforeReplace: true },
+      { parent: this },
     );
 
     const assumeLambda = aws.iam.getPolicyDocumentOutput({
@@ -109,7 +109,7 @@ export class GoLambda extends pulumi.ComponentResource {
         architectures: args.architecture ? [args.architecture] : undefined,
         environment: args.env,
       },
-      { parent: this, deleteBeforeReplace: true },
+      { parent: this },
     );
 
     this.registerOutputs({

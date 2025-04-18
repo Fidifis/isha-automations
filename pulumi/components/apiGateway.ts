@@ -33,7 +33,7 @@ export default class ApiGatewayV2 extends pulumi.ComponentResource {
   public readonly integrations: aws.apigatewayv2.Integration[] = [];
   public readonly routes: aws.apigatewayv2.Route[] = [];
   public readonly permissions: aws.lambda.Permission[] = [];
-  public readonly authorizers: aws.apigatewayv2.Authorizer[] = [];
+  private readonly authorizers: aws.apigatewayv2.Authorizer[] = [];
 
   constructor(
     name: string,

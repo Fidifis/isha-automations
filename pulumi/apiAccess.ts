@@ -88,7 +88,7 @@ export default class ApiAccess extends pulumi.ComponentResource {
         type: aws.ssm.ParameterType.SecureString,
         value: password.result,
       },
-      { parent: this, deleteBeforeReplace: true },
+      { parent: this },
     );
   }
 }
