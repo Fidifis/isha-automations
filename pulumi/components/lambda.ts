@@ -93,7 +93,7 @@ export class GoLambda extends pulumi.ComponentResource {
     // }, {parent: this})
 
     this.lambda = new aws.lambda.Function(
-      `${name}-Lambda`,
+      name,
       {
         // code: builder.asset,
         code: args.source.code,

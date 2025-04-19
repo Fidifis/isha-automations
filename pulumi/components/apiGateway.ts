@@ -2,16 +2,18 @@ import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import { Input } from "@pulumi/pulumi";
 
-export interface ApiGatewayV2Props {
-  name?: Input<string>;
-  description?: Input<string>;
-  routes: {
+export interface ApiGatewayRoute {
     path: Input<string>;
     method?: Input<string>;
     eventHandler: aws.lambda.Function;
     authorizer?: aws.lambda.Function;
     payloadFormatVersion?: Input<string>;
-  }[];
+}
+
+export interface ApiGatewayV2Props {
+  name?: Input<string>;
+  description?: Input<string>;
+  routes: ApiGatewayRoute[];
   corsConfig?: {
     allowOrigins: Input<Input<string>[]>;
     allowMethods: Input<Input<string>[]>;
@@ -43,7 +45,7 @@ export default class ApiGatewayV2 extends pulumi.ComponentResource {
     super("fidifis:aws:ApiGatewayV2", name, {}, opts);
 
     this.apiGateway = new aws.apigatewayv2.Api(
-      `${name}-Api`,
+      name,
       {
         protocolType: "HTTP",
         name: args.name,

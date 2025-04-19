@@ -218,7 +218,7 @@ func HandleRequest(ctx context.Context, event Event) (Output, error) {
 		return Output{}, err
 	}
 
-  bKey := fmt.Sprintf("%s%s", targetKey, jobId)
+  bKey := fmt.Sprintf("%s%s/%s", targetKey, jobId, Sanitize(videoFile.Name))
 	_, err = s3c.PutObject(ctx, &s3.PutObjectInput{
 			Bucket: &targetBucket,
 			Key:    &bKey,
