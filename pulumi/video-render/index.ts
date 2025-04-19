@@ -60,6 +60,7 @@ export default class VideoRender extends pulumi.ComponentResource {
       },
       roleInlinePolicies: [lambdaPolicy],
       reservedConcurrency: 20,
+      timeout: 300
     }, {parent: this});
 
     this.routes = [
