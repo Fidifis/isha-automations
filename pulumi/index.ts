@@ -3,6 +3,7 @@ import * as aws from "@pulumi/aws";
 import { DMQs } from "./dmqs";
 import * as utils from "./utils";
 import ApiAccess from "./apiAccess";
+import * as fs from "fs";
 
 async function main() {
   const meta = {
@@ -16,14 +17,13 @@ async function main() {
   utils.addS3BasicRules("LambdaCodeRules", codeBucket);
 
   new aws.ssm.Parameter(
-    "GCPAccessToken",
+    "GCPAccessConfig",
     {
-      name: `/isha/gcpkeys/access`,
-      description: `service account`,
-      type: aws.ssm.ParameterType.SecureString,
-      value: "replace me",
+      name: `/isha/gcp-fed/lib-config`,
+      description: `Client library config file for GCP federation to impersonate Google service account`,
+      type: aws.ssm.ParameterType.String,
+      value: fs.readFileSync("./clientLibConfig.json", "utf8")
     },
-    { ignoreChanges: ["value"] },
   );
 
   const apiAccessRes = new ApiAccess("ApiAuthorizerPSK", {

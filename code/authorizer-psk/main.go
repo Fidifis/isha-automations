@@ -69,7 +69,9 @@ func main() {
 	lambda.Start(HandleRequest)
 }
 func init() {
-	logger, _ := zap.NewProduction()
+	logConfig := zap.NewProductionConfig()
+	logConfig.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
+	logger, _ := logConfig.Build()
 	defer logger.Sync()
 	log = logger.Sugar()
 
