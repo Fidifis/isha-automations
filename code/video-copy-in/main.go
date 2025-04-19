@@ -2,26 +2,25 @@ package main
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"go.uber.org/zap"
 
-	"github.com/aws/aws-lambda-go/events"
+	// "github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
-	"github.com/aws/aws-lambda-go/lambdacontext"
-	"github.com/aws/aws-sdk-go-v2/aws"
+	// "github.com/aws/aws-lambda-go/lambdacontext"
+	// "github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 
-	"golang.org/x/oauth2"
+	// "golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/option"
@@ -108,6 +107,17 @@ func InitDrive(ctx context.Context) (*drive.Service, error) {
 	return driveService, nil
 }
 
+func Sanitize(text string) string {
+	text = strings.ToLower(text)
+	text = strings.ReplaceAll(text, "-", "_")
+	text = strings.ReplaceAll(text, " ", "_")
+
+	reg := regexp.MustCompile(`[^a-z0-9\_\.]+`)
+	text = reg.ReplaceAllString(text, "")
+
+	return text
+}
+
 func HandleRequest(ctx context.Context, event Event) (Output, error) {
 	// lctx, ok := lambdacontext.FromContext(ctx)
 	// if !ok {
@@ -116,9 +126,15 @@ func HandleRequest(ctx context.Context, event Event) (Output, error) {
 
 	targetBucket := os.Getenv("BUCKET_NAME")
 	targetKey := os.Getenv("BUCKET_KEY")
-	if targetBucket == "" || targetKey == "" {
-		log.Fatal("env BUCKET_NAME or BUCKET_KEY is empty")
+	if targetBucket == "" {
+		log.Fatal("env BUCKET_NAME is empty")
 	}
+	if len(targetKey) > 0 && !strings.HasSuffix(targetKey, "/") {
+		targetKey = fmt.Sprintf("%s/", targetKey)
+	}
+
+	jobId := fmt.Sprintf("%x", rand.IntN(4294967295))
+	log.Info("Job ID: ", jobId)
 
 	driveSvc, err := InitDrive(ctx)
 	if err != nil {
@@ -159,8 +175,7 @@ func HandleRequest(ctx context.Context, event Event) (Output, error) {
 	videoPrio := 10000
 
 	for _, f := range files.Files {
-		// normalised is lower case with _ as separator
-		normalisedName := strings.ReplaceAll(strings.ReplaceAll(strings.ToLower(f.Name), " ", "_"), "-", "_")
+		normalisedName := Sanitize(f.Name)
 		extension := filepath.Ext(normalisedName)
 
 		// Try to pick the most suitable video, if videos > 1
@@ -203,10 +218,20 @@ func HandleRequest(ctx context.Context, event Event) (Output, error) {
 		return Output{}, err
 	}
 
+  bKey := fmt.Sprintf("%s%s", targetKey, jobId)
+	_, err = s3c.PutObject(ctx, &s3.PutObjectInput{
+			Bucket: &targetBucket,
+			Key:    &bKey,
+			Body:   tmpFile,
+		})
+	if err != nil {
+		 log.Error("Error S3 upload: ", err)
+		return Output{}, err
+	}
 
-	// Send the file to S3
-
-	return Output{}, errors.New("Not implemented")
+	return Output{
+		JobId: jobId,
+	}, nil
 }
 
 // func ErrResponse(response string, ctx *lambdacontext.LambdaContext) (events.APIGatewayV2HTTPResponse, error) {

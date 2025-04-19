@@ -21,7 +21,7 @@ for lambda_dir in */; do
     GOOS=linux GOARCH=arm64 CGO_ENABLED=0 \
       go build -ldflags="-s -w" -o /tmp/build/bootstrap
 
-    rm "$workdir/bin/$lambda_name.zip"
+    rm "$workdir/bin/$lambda_name.zip" 2> /dev/null || true
     zip -jq "$workdir/bin/$lambda_name.zip" /tmp/build/bootstrap
     rm /tmp/build/bootstrap
 

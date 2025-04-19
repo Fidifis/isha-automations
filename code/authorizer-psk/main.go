@@ -25,7 +25,7 @@ func getSSMPath() string {
 	if ssmPath == "" {
 		ssmPath = "/isha/auth"
 	}
-	if ssmPath[len(ssmPath)-1:] == "/" {
+	if strings.HasSuffix(ssmPath, "/") {
 		ssmPath = ssmPath[:len(ssmPath)-1]
 	}
 	return ssmPath
