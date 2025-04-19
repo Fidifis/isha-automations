@@ -50,7 +50,10 @@ export default class VideoRender extends pulumi.ComponentResource {
         s3Key: "video-copy-in.zip",
       },
       architecture: Arch.arm,
-      logs: { retention: 14 },
+      reservedConcurrency: 20,
+      timeout: 300,
+      memory: 256,
+      logs: { retention: 30 },
       env: {
         variables: {
           SSM_GCP_CONFIG: args.gcpConfigParam.name,
@@ -59,13 +62,11 @@ export default class VideoRender extends pulumi.ComponentResource {
         },
       },
       roleInlinePolicies: [lambdaPolicy],
-      reservedConcurrency: 20,
-      timeout: 300
     }, {parent: this});
 
     this.routes = [
       {
-        path: "/unstable/v1/process/reel",
+        path: "/v1/process/reel",
         method: "POST",
         eventHandler: lambda.lambda,
         authorizer: args.apiAuthorizer,
