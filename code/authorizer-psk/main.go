@@ -31,7 +31,13 @@ func getSSMPath() string {
 	return ssmPath
 }
 
-func getParameters(ssmPath string) (map[string]string, error) {
+func getParameters(ctx context.Context) (map[string]string, error) {
+	if cachedKeys != nil {
+		return cachedKeys, nil
+	}
+
+	ssmPath := getSSMPath()
+
 	log.Debug("Loading keys from parameter store. ID: ", ssmPath)
 
 	leMap := make(map[string]string)
@@ -42,7 +48,7 @@ func getParameters(ssmPath string) (map[string]string, error) {
 	for firstRun || nextToken != nil {
 		firstRun = false
 
-		response, err := ssmc.GetParametersByPath(context.Background(), &ssm.GetParametersByPathInput{
+		response, err := ssmc.GetParametersByPath(ctx, &ssm.GetParametersByPathInput{
 			WithDecryption: aws.Bool(true),
 			Path:           aws.String(ssmPath),
 			Recursive:      aws.Bool(true),
@@ -62,6 +68,7 @@ func getParameters(ssmPath string) (map[string]string, error) {
 	}
 	log.Debug("Loaded ", len(leMap), "parameters")
 
+	cachedKeys = leMap
 	return leMap, nil
 }
 
@@ -81,16 +88,11 @@ func init() {
 	}
 
 	ssmc = ssm.NewFromConfig(cfg)
-	ssmPath := getSSMPath()
-	cachedKeys, err = getParameters(ssmPath)
-	if err != nil {
-		log.Fatal("error reading from parameter store. ", err)
-	}
 }
 
-func validate(keyId string, key string) bool {
+func validate(keys map[string]string, keyId string, key string) bool {
 	log.Info("Presented auth key for: ", keyId)
-	v, ok := cachedKeys[keyId]
+	v, ok := keys[keyId]
 	return ok && v == key
 }
 
@@ -98,9 +100,14 @@ func HandleRequest(ctx context.Context, event events.APIGatewayV2CustomAuthorize
 	keyId, okId := event.Headers["x-auth-id"]
 	key, okKey := event.Headers["x-auth-key"]
 
+	keyMap, err := getParameters(ctx)
+	if err != nil {
+		log.Fatal("error reading from parameter store. ", err)
+	}
+
 	var valid bool
 	if okId && okKey {
-		valid = validate(keyId, key)
+		valid = validate(keyMap, keyId, key)
 	} else {
 		valid = false
 		log.Info("request doesn't have expected headers")
