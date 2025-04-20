@@ -1,7 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import { DmqMakerLambda } from "./makerLambda";
-import ApigatewayV2 from "../components/apiGateway";
+import { ApiGatewayRoute } from "../components/apiGateway";
 
 export interface DMQsProps {
   codeBucket: aws.s3.BucketV2;
@@ -9,6 +9,8 @@ export interface DMQsProps {
 }
 
 export class DMQs extends pulumi.ComponentResource {
+  public readonly routes: ApiGatewayRoute[];
+
   constructor(
     name: string,
     args: DMQsProps,
@@ -22,19 +24,17 @@ export class DMQs extends pulumi.ComponentResource {
       { parent: this },
     );
 
-    new ApigatewayV2(
-      `${name}-Api`,
+    this.routes = [
       {
-        routes: [
-          {
-            path: "/unstable/v1/make",
-            method: "POST",
-            eventHandler: makerLambda.lambda,
-            authorizer: args.apiAuthorizer,
-          },
-        ],
+        path: "/unstable/v1/make",
+        method: "POST",
+        eventHandler: makerLambda.lambda,
+        authorizer: args.apiAuthorizer,
       },
-      { parent: this },
-    );
+    ];
+
+    this.registerOutputs({
+      routes: this.routes,
+    });
   }
 }

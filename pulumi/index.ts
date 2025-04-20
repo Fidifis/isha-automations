@@ -23,7 +23,7 @@ async function main() {
 
   const gcpConfigParam = new aws.ssm.Parameter("GCPAccessConfig", {
     name: `/isha/${pulumi.getStack()}/gcp-fed/lib-config`,
-    description: `Client library config file for GCP federation to impersonate Google service account`,
+    description: "Client library config file for GCP federation to impersonate Google service account",
     type: aws.ssm.ParameterType.String,
     value: fs.readFileSync("./clientLibConfig.json", "utf8"),
   });
@@ -34,7 +34,10 @@ async function main() {
     meta,
   });
 
-  new DMQs("DMQs", { codeBucket, apiAuthorizer: apiAccessRes.apiAuthorizer });
+  const dmqs = new DMQs("DMQs", {
+    codeBucket,
+    apiAuthorizer: apiAccessRes.apiAuthorizer,
+  });
   const videoRender = new VideoRender("VideoRender", {
     codeBucket,
     procFilesBucket,
@@ -43,7 +46,7 @@ async function main() {
   });
 
   new ApigatewayV2(`prime-Api`, {
-    routes: [...videoRender.routes],
+    routes: [...videoRender.routes, ...dmqs.routes],
   });
 }
 
