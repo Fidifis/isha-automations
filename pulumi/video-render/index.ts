@@ -70,14 +70,6 @@ export default class VideoRender extends pulumi.ComponentResource {
       },
       { parent: this },
     );
-    new aws.iam.PolicyAttachment(
-      `${name}-CopyIn`,
-      {
-        roles: [lambdaCopyIn.role],
-        policyArn: lambdaPolicy.arn,
-      },
-      { parent: this },
-    );
 
     const lambdaDocsExtract = new GoLambda(
       `${name}-SrtDocsExtract`,
@@ -101,10 +93,11 @@ export default class VideoRender extends pulumi.ComponentResource {
       },
       { parent: this },
     );
+
     new aws.iam.PolicyAttachment(
-      `${name}-SrtDocsExtract`,
+      `${name}-Policy`,
       {
-        roles: [lambdaDocsExtract.role],
+        roles: [lambdaDocsExtract.role, lambdaCopyIn.role],
         policyArn: lambdaPolicy.arn,
       },
       { parent: this },
