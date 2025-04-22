@@ -9,14 +9,13 @@ mkdir -p /tmp/build
 
 cd "$workdir/code"
 
-for lambda_dir in */; do
-    if [[ ! -f "$lambda_dir/go.mod" ]]; then
-        # echo "Skipping $lambda_dir (no go.mod found)"
-        continue
-    fi
-    lambda_name="${lambda_dir%/}"
-    echo "Building $lambda_name..."
-    cd "$workdir/code/$lambda_name"
+find . -type f -name go.mod | while read -r gomod; do
+    lambda_dir=$(dirname "$gomod")
+    lambda_name=$(echo "$lambda_dir" | sed 's|^\./||' | tr '/' '-')
+
+    echo "Building $lambda_name from $lambda_dir..."
+
+    cd "$workdir/code/$lambda_dir"
 
     GOOS=linux GOARCH=arm64 CGO_ENABLED=0 \
       go build -ldflags="-s -w" -o /tmp/build/bootstrap
@@ -24,6 +23,4 @@ for lambda_dir in */; do
     rm "$workdir/bin/$lambda_name.zip" 2> /dev/null || true
     zip -jq "$workdir/bin/$lambda_name.zip" /tmp/build/bootstrap
     rm /tmp/build/bootstrap
-
-    cd "$workdir/code"
 done

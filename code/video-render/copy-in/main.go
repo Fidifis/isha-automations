@@ -32,7 +32,7 @@ var (
 	driveSvc *drive.Service
 
 	// value is priority. Lower value means more important
-	videoFormats = map[string]int{".mp4": 0, ".m4v": 1, ".mov": 2}
+	videoFormats = map[string]int{".mp4": 0, ".m4v": 1, ".avi": 2, ".mov": 3}
 	audioFormats = map[string]int{".wav": 0, ".m4a": 1, ".mp3": 2, ".ogg": 3}
 )
 

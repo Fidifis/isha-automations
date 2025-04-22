@@ -52,7 +52,7 @@ export default class VideoRender extends pulumi.ComponentResource {
       {
         source: {
           s3Bucket: args.codeBucket,
-          s3Key: "video-copy-in.zip",
+          s3Key: "video-render-copy-in.zip",
         },
         architecture: Arch.arm,
         reservedConcurrency: 20,
@@ -84,7 +84,7 @@ export default class VideoRender extends pulumi.ComponentResource {
       {
         source: {
           s3Bucket: args.codeBucket,
-          s3Key: "video-srt-docs-extract.zip",
+          s3Key: "video-render-srt-docs-extract.zip",
         },
         architecture: Arch.arm,
         reservedConcurrency: 20,
