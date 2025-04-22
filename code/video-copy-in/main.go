@@ -2,9 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
-	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -29,8 +29,7 @@ import (
 var (
 	s3c       *s3.Client
 	log       *zap.SugaredLogger
-	ssmc      *ssm.Client
-	gcpConfig *string
+	driveSvc *drive.Service
 
 	// value is priority. Lower value means more important
 	videoFormats = map[string]int{".mp4": 0, ".m4v": 1, ".mov": 2}
@@ -38,10 +37,9 @@ var (
 )
 
 type Event struct {
-	SourceFolderId string `json:"sourceDriveFolderId"`
-}
-type Output struct {
 	JobId string `json:"jobId"`
+	SourceFolderId string `json:"sourceDriveFolderId"`
+	DriveId string `json:"driveId"`
 }
 
 func main() {
@@ -54,20 +52,23 @@ func init() {
 	defer logger.Sync()
 	log = logger.Sugar()
 
-	cfg, err := config.LoadDefaultConfig(context.TODO())
+	ctx := context.Background()
+
+	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
 		log.Fatal("unable to load SDK config ", err)
 	}
 
-	ssmc = ssm.NewFromConfig(cfg)
+	ssmc := ssm.NewFromConfig(cfg)
 	s3c = s3.NewFromConfig(cfg)
+
+	err = InitDrive(ctx, ssmc)
+	if err != nil {
+		log.Fatal("Error initializig G drive client service: ", err)
+	}
 }
 
-func GCPConfig(ctx context.Context) (*string, error) {
-	if gcpConfig != nil {
-		return gcpConfig, nil
-	}
-
+func GCPConfig(ctx context.Context, ssmc *ssm.Client) (*string, error) {
 	log.Debug("Reading client lib config from param store")
 	ssmConfigName := os.Getenv("SSM_GCP_CONFIG")
 	if ssmConfigName == "" {
@@ -81,30 +82,27 @@ func GCPConfig(ctx context.Context) (*string, error) {
 	}
 
 	result := param.Parameter.Value
-	gcpConfig = result
 	return result, nil
 }
 
-func InitDrive(ctx context.Context) (*drive.Service, error) {
-	gconf, err := GCPConfig(ctx)
+func InitDrive(ctx context.Context, ssmc *ssm.Client) error {
+	gconf, err := GCPConfig(ctx, ssmc)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	conf, err := google.JWTConfigFromJSON([]byte(*gconf), drive.DriveReadonlyScope)
+	cred, err := google.CredentialsFromJSON(ctx, []byte(*gconf), drive.DriveScope)
 	if err != nil {
-		log.Error("Error parsing JWT config: ", err)
-		return nil, err
+		return errors.Join(errors.New("Error parsing JWT config"), err)
 	}
 
-	client := conf.Client(ctx)
-	driveService, err := drive.NewService(ctx, option.WithHTTPClient(client))
+	driveService, err := drive.NewService(ctx, option.WithCredentials(cred))
 	if err != nil {
-		log.Error("Error creating Drive client: ", err)
-		return nil, err
+		return errors.Join(errors.New("Error creating Drive client"), err)
 	}
 
-	return driveService, nil
+	driveSvc = driveService
+	return nil
 }
 
 func Sanitize(text string) string {
@@ -118,12 +116,7 @@ func Sanitize(text string) string {
 	return text
 }
 
-func HandleRequest(ctx context.Context, event Event) (Output, error) {
-	// lctx, ok := lambdacontext.FromContext(ctx)
-	// if !ok {
-	// 	log.Fatal("Unable to read Lambda Context")
-	// }
-
+func getBucket(jobId string) (string, string) {
 	targetBucket := os.Getenv("BUCKET_NAME")
 	targetKey := os.Getenv("BUCKET_KEY")
 	if targetBucket == "" {
@@ -133,41 +126,48 @@ func HandleRequest(ctx context.Context, event Event) (Output, error) {
 		targetKey = fmt.Sprintf("%s/", targetKey)
 	}
 
-	jobId := fmt.Sprintf("%x", rand.IntN(4294967295))
-	log.Info("Job ID: ", jobId)
+  targetKey = fmt.Sprintf("%s%s/", targetKey, jobId)
+	log.Debug("S3 key: ", targetKey)
+	return targetBucket, targetKey
+}
 
-	driveSvc, err := InitDrive(ctx)
-	if err != nil {
-		log.Error("Error initializig G drive client service: ", err)
-		return Output{}, err
-	}
-
+func FindStems(ctx context.Context, folderId string, driveId string) (*drive.File, error) {
 	stemsIter, err := driveSvc.Files.List().
 		Context(ctx).
-		Q(fmt.Sprintf("'%s' in parents and trashed = false and mimeType = 'application/vnd.google-apps.folder' and name = 'Stems'", event.SourceFolderId)).
+		Q(fmt.Sprintf("'%s' in parents and trashed = false and mimeType = 'application/vnd.google-apps.folder' and name = 'Stems'", folderId)).
 		Fields("files(id, name)").
+		Corpora("drive").
+		SupportsAllDrives(true).
+		IncludeItemsFromAllDrives(true).
+		DriveId(driveId).
 		Do()
 	if err != nil {
-		log.Error("Error finding stems in: ", event.SourceFolderId, err)
-		return Output{}, err
+		return nil, errors.Join(errors.New(fmt.Sprint("Error finding stems in: ", folderId)), err)
 	}
 
 	if len(stemsIter.Files) == 0 {
-		log.Error("There is no folder Stems in: ", event.SourceFolderId)
-		return Output{}, err
+		return nil, errors.Join(errors.New(fmt.Sprint("There is no folder Stems in: ", folderId)), err)
 	}
-	stems := stemsIter.Files[0].Id
+	return stemsIter.Files[0], nil
+}
 
+func FilterFiles(ctx context.Context, stemsId string, driveId string) (*drive.File, []*drive.File, error) {
 	// There is a possible nextPageToken field.
 	// I do ignore it as I expect only a few files.
 	files, err := driveSvc.Files.List().
 		Context(ctx).
-		Q(fmt.Sprintf("'%s' in parents and trashed = false", event.SourceFolderId)).
-		Fields("files(id, name, mimeType)").
+		Q(fmt.Sprintf("'%s' in parents and trashed = false", stemsId)).
+		Fields("nextPageToken, files(id, name, mimeType)").
+		Corpora("drive").
+		SupportsAllDrives(true).
+		IncludeItemsFromAllDrives(true).
+		DriveId(driveId).
 		Do()
 	if err != nil {
-		log.Error("Error listing files in: ", stems, err)
-		return Output{}, err
+		return nil, nil, errors.Join(errors.New(fmt.Sprint("Error listing files in:", stemsId)), err)
+	}
+	if files.NextPageToken != "" {
+		log.Warn("Next Page Token is present. Pagination is not implemented. This may cause an absence of materials.")
 	}
 
 	var audioFiles []*drive.File
@@ -194,44 +194,86 @@ func HandleRequest(ctx context.Context, event Event) (Output, error) {
 			audioFiles = append(audioFiles, f)
 		}
 	}
+	if videoFile == nil {
+		return nil, nil, errors.New("No video file found in stems")
+	}
+	if len(audioFiles) == 0 {
+		return nil, nil, errors.New("No audio files found in stems")
+	}
 
-	resp, err := driveSvc.Files.Get(videoFile.Id).Download()
+	return videoFile, audioFiles, nil
+}
+
+func drive2s3(ctx context.Context, file *drive.File, targetBucket string, targetKey string) error {
+	resp, err := driveSvc.Files.Get(file.Id).Download()
 	if err != nil {
-		log.Error("Unable to download file: ", err)
-		return Output{}, err
+		return errors.Join(errors.New(fmt.Sprintf("Unable to download file: %s: %s", file.Id, file.Name)), err)
 	}
 	defer resp.Body.Close()
 
-	tmpFile, err := os.CreateTemp("", "gdrive-download-")
+	tmpFile, err := os.CreateTemp("", "gdrive-")
 	if err != nil {
 		 log.Error("Error creating temporary file: ", err)
-		return Output{}, err
+		return errors.Join(errors.New("Error creating temporary file"), err)
 	}
 	defer os.Remove(tmpFile.Name()) // Clean up the temporary file
 	defer tmpFile.Close()
 
-	log.Info("Downloading Google Drive file to temporary storage: ", tmpFile.Name())
+	log.Debug("Downloading Google Drive file to temporary storage: ", tmpFile.Name())
 
-	_, err = io.Copy(tmpFile, resp.Body)
+	copyBytes, err := io.Copy(tmpFile, resp.Body)
 	if err != nil {
-		 log.Error("Error copying Google Drive content to temporary file: ", err)
-		return Output{}, err
+		return errors.Join(errors.New(fmt.Sprint("Error copying Google Drive content to temporary file: ", tmpFile.Name())), err)
+	}
+	log.Debug("Bytes Downloaded ", copyBytes)
+
+	// Rewind to start of FS stream
+	_, err = tmpFile.Seek(0, io.SeekStart)
+	if err != nil {
+		return errors.Join(errors.New("Error file stream rewind"), err)
 	}
 
-  bKey := fmt.Sprintf("%s%s/%s", targetKey, jobId, Sanitize(videoFile.Name))
+  bKey := fmt.Sprintf("%s%s", targetKey, Sanitize(file.Name))
 	_, err = s3c.PutObject(ctx, &s3.PutObjectInput{
 			Bucket: &targetBucket,
 			Key:    &bKey,
 			Body:   tmpFile,
 		})
 	if err != nil {
-		 log.Error("Error S3 upload: ", err)
-		return Output{}, err
+		return errors.Join(errors.New(fmt.Sprintf("Error S3 upload: bucket=%s key=%s file: %s", targetBucket, targetKey, file.Name)), err)
 	}
 
-	return Output{
-		JobId: jobId,
-	}, nil
+	return nil
+}
+
+func HandleRequest(ctx context.Context, event Event) (error) {
+	// lctx, ok := lambdacontext.FromContext(ctx)
+	// if !ok {
+	// 	log.Fatal("Unable to read Lambda Context")
+	// }
+
+	targetBucket, targetKey := getBucket(event.JobId)
+
+	stems, err := FindStems(ctx, event.SourceFolderId, event.DriveId)
+	if err != nil {
+		return err
+	}
+
+	videoFile, audioFiles, err := FilterFiles(ctx, stems.Id, event.DriveId)
+
+	err = drive2s3(ctx, videoFile, targetBucket, targetKey)
+	if err != nil {
+		return err
+	}
+
+	for _, audioFile := range audioFiles {
+		err = drive2s3(ctx, audioFile, targetBucket, targetKey)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // func ErrResponse(response string, ctx *lambdacontext.LambdaContext) (events.APIGatewayV2HTTPResponse, error) {

@@ -8,12 +8,27 @@ export enum Arch {
   arm = "arm64",
 }
 
+export const AssumePolicy = aws.iam.getPolicyDocumentOutput({
+  statements: [
+    {
+      effect: "Allow",
+      principals: [
+        {
+          type: "Service",
+          identifiers: ["lambda.amazonaws.com"],
+        },
+      ],
+      actions: ["sts:AssumeRole"],
+    },
+  ],
+});
+
 export interface GoLambdaProps {
   source: {
     code?: Input<string>;
     s3Key?: Input<string>;
     s3Bucket?: aws.s3.BucketV2;
-  }
+  };
   name?: Input<string>;
   handler?: Input<string>;
   timeout?: Input<number>;
@@ -25,6 +40,7 @@ export interface GoLambdaProps {
   };
   roleInlinePolicies?: Input<aws.types.input.iam.RoleInlinePolicy>[];
   env?: Input<aws.types.input.lambda.FunctionEnvironment>;
+  ephemeralStorage?: Input<number>;
 }
 
 export class GoLambda extends pulumi.ComponentResource {
@@ -41,7 +57,7 @@ export class GoLambda extends pulumi.ComponentResource {
 
     const lambdaName = `${pulumi.getProject()}-${pulumi.getStack()}-${args.name ?? name}`;
 
-     this.logGroup = new aws.cloudwatch.LogGroup(
+    this.logGroup = new aws.cloudwatch.LogGroup(
       `${name}-Log`,
       {
         name: `/aws/lambda/${lambdaName}`,
@@ -50,39 +66,28 @@ export class GoLambda extends pulumi.ComponentResource {
       { parent: this },
     );
 
-    const assumeLambda = aws.iam.getPolicyDocumentOutput({
-      statements: [
+    const loggingPolicy = {
+      name: "CloudWatch-logging",
+      policy: aws.iam.getPolicyDocumentOutput(
         {
-          effect: "Allow",
-          principals: [
+          statements: [
             {
-              type: "Service",
-              identifiers: ["lambda.amazonaws.com"],
+              actions: ["logs:CreateLogStream", "logs:PutLogEvents"],
+              resources: [
+                this.logGroup.arn,
+                pulumi.interpolate`${this.logGroup.arn}:*`,
+              ],
             },
           ],
-          actions: ["sts:AssumeRole"],
         },
-      ],
-    },{parent: this});
-    const policy = aws.iam.getPolicyDocumentOutput({
-      statements: [
-        {
-          actions: ["logs:CreateLogStream", "logs:PutLogEvents"],
-          resources: [this.logGroup.arn, pulumi.interpolate`${this.logGroup.arn}:*`],
-        },
-      ],
-    }, {parent: this});
+        { parent: this },
+      ).json,
+    };
     this.role = new aws.iam.Role(
       `${name}-ExecRole`,
       {
-        assumeRolePolicy: assumeLambda.json,
-        inlinePolicies: [
-          {
-            name: "CloudWatch-logging",
-            policy: policy.json,
-          },
-          ...(args.roleInlinePolicies ?? []),
-        ],
+        assumeRolePolicy: AssumePolicy.json,
+        inlinePolicies: [loggingPolicy, ...(args.roleInlinePolicies ?? [])],
       },
       { parent: this },
     );
@@ -108,6 +113,9 @@ export class GoLambda extends pulumi.ComponentResource {
         memorySize: args.memory,
         architectures: args.architecture ? [args.architecture] : undefined,
         environment: args.env,
+        ephemeralStorage: {
+          size: args.ephemeralStorage ?? 512,
+        },
       },
       { parent: this },
     );

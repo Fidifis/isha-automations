@@ -5,6 +5,19 @@ export interface MetaProps {
   region: string;
 }
 
+export const bucketCommonLifecycleRules = [
+  {
+    id: "CommonLifecycle",
+    status: "Enabled",
+    abortIncompleteMultipartUpload: {
+      daysAfterInitiation: 1,
+    },
+    expiration: {
+      expiredObjectDeleteMarker: true,
+    },
+  },
+];
+
 export const bucketSecureTransportPolicy = (arn: string) =>
   aws.iam.getPolicyDocument({
     statements: [
@@ -50,25 +63,16 @@ export const bucketSecureTransportPolicy = (arn: string) =>
 export function addS3BasicRules(
   name: string,
   bucket: aws.s3.BucketV2,
-  options: { policy: boolean } = { policy: true },
+  options?: { noPolicy?: boolean; noLifecycle?: boolean },
 ) {
-  new aws.s3.BucketLifecycleConfigurationV2(name, {
-    bucket: bucket.id,
-    rules: [
-      {
-        id: "CommonLifecycle",
-        status: "Enabled",
-        abortIncompleteMultipartUpload: {
-          daysAfterInitiation: 1,
-        },
-        expiration: {
-          expiredObjectDeleteMarker: true,
-        },
-      },
-    ],
-  });
+  if (!options?.noLifecycle) {
+    new aws.s3.BucketLifecycleConfigurationV2(name, {
+      bucket: bucket.id,
+      rules: bucketCommonLifecycleRules,
+    });
+  }
 
-  if (options.policy) {
+  if (!options?.noPolicy) {
     new aws.s3.BucketPolicy(
       name,
       {
