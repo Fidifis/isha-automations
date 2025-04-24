@@ -17,8 +17,7 @@ find . -type f -name go.mod | while read -r gomod; do
 
     cd "$workdir/code/$lambda_dir"
 
-    # Check if build.sh exists and is executable
-    if [ -f "build.sh" ] && [ -x "build.sh" ]; then
+    if [ -f "build.sh" ]; then
         echo "Found build.sh script, using custom build process..."
         ./build.sh "$workdir/bin/$lambda_name.zip"
     else

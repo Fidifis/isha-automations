@@ -13,4 +13,4 @@ $engine run --rm \
   -v ./bin:/build/bin \
   -w /build \
   golang:1.24 \
-  bash -c "apt-get update && apt-get install -y zip && /build/code/build-go.sh"
+  bash -c "apt-get update && apt-get install -y zip curl xz-utils && /build/code/build-go.sh"

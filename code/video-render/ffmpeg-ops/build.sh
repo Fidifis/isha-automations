@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -euxo pipefail
 
-GOOS=linux GOARCH=x8664 CGO_ENABLED=0 \
+GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
   go build -ldflags="-s -w" -o /tmp/build/bootstrap
 
-ffmpeg_version=7.1.1
-curl -L https://ffmpeg.org/releases/ffmpeg-${ffmpeg_version}.tar.xz -o /tmp/ffmpeg.tar.xz
+ffmpeg_name="ffmpeg-n7.1.1-6-g48c0f071d4-linux64-gpl-7.1"
+
+curl -L https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2025-04-23-13-05/${ffmpeg_name}.tar.xz -o /tmp/ffmpeg.tar.xz
 tar -xf /tmp/ffmpeg.tar.xz -C /tmp
-mv /tmp/ffmpeg-${ffmpeg_version}/ffmpeg /tmp/build/
+ls /tmp
+ls /tmp/${ffmpeg_name}
+ls /tmp/${ffmpeg_name}/bin
+mv /tmp/${ffmpeg_name}/bin/ffmpeg /tmp/build/ffmpeg
 
 rm "$1" 2> /dev/null || true
 zip -jq "$1" /tmp/build/*
-rm /tmp/build/bootstrap
+rm /tmp/build/*

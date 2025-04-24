@@ -65,7 +65,7 @@ func getBucketKey(jobId string, targetKey string) (string) {
 }
 
 func testFFmpeg(ctx context.Context) error {
-	cmd := exec.CommandContext(ctx, "ffmpeg", "-version")
+	cmd := exec.CommandContext(ctx, "./ffmpeg", "-version")
 	if err := cmd.Run(); err != nil {
 		return errors.Join(errors.New("Failed inital ffmpeg test"), err)
 	}
@@ -88,7 +88,7 @@ func copyVideoIn(ctx context.Context, videoFile *os.File, s3Bucket string, s3Key
 }
 
 func ffmpegDecode(ctx context.Context, videoFile *os.File, frameFolder string) error {
-	cmd := exec.CommandContext(ctx, "ffmpeg", "-i", videoFile.Name(), "-vsync", "0", frameFolder + "/frame_%06d.jpg")
+	cmd := exec.CommandContext(ctx, "./ffmpeg", "-i", videoFile.Name(), "-vsync", "0", frameFolder + "/frame_%06d.jpg")
 	if err := cmd.Run(); err != nil {
 		return errors.Join(errors.New("Failed ffmpeg decode to frames"), err)
 	}
