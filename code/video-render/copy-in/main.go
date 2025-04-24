@@ -233,10 +233,10 @@ func drive2s3(ctx context.Context, file *drive.File, targetBucket string, target
 		return errors.Join(errors.New("Error file stream rewind"), err)
 	}
 
-  bKey := fmt.Sprintf("%s%s", targetKey, Sanitize(file.Name))
+  // bKey := fmt.Sprintf("%s%s", targetKey, Sanitize(file.Name))
 	_, err = s3c.PutObject(ctx, &s3.PutObjectInput{
 			Bucket: &targetBucket,
-			Key:    &bKey,
+			Key:    &targetKey,
 			Body:   tmpFile,
 		})
 	if err != nil {
@@ -261,13 +261,15 @@ func HandleRequest(ctx context.Context, event Event) (error) {
 
 	videoFile, audioFiles, err := FilterFiles(ctx, stems.Id, event.DriveId)
 
-	err = drive2s3(ctx, videoFile, targetBucket, targetKey)
+  bKey := fmt.Sprintf("%svideo.%s", targetKey, filepath.Ext(videoFile.Name))
+	err = drive2s3(ctx, videoFile, targetBucket, bKey)
 	if err != nil {
 		return err
 	}
 
-	for _, audioFile := range audioFiles {
-		err = drive2s3(ctx, audioFile, targetBucket, targetKey)
+	for i, audioFile := range audioFiles {
+		bKey := fmt.Sprintf("%saudio_%d.%s", targetKey, i, filepath.Ext(audioFile.Name))
+		err = drive2s3(ctx, audioFile, targetBucket, bKey)
 		if err != nil {
 			return err
 		}
