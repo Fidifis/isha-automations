@@ -4,7 +4,7 @@ import * as aws from "@pulumi/aws";
 import { Input } from "@pulumi/pulumi";
 
 export enum Arch {
-  x86 = "X8664",
+  x86 = "x86_64",
   arm = "arm64",
 }
 

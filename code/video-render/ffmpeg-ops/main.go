@@ -97,6 +97,10 @@ func ffmpegDecode(ctx context.Context, videoFile *os.File, frameFolder string) e
 
 func copyFramesOut(ctx context.Context, framesFolder string, s3Bucket string, s3Key string) error {
 	err := filepath.WalkDir(framesFolder, func(path string, entry fs.DirEntry, err error) error {
+		if entry.IsDir() {
+			return nil
+		}
+
 		file, err := os.Open(path)
 		if err != nil {
 			return err

@@ -94,10 +94,27 @@ export default class VideoRender extends pulumi.ComponentResource {
       { parent: this },
     );
 
+    const lambdaFfmpeg = new GoLambda(
+      `${name}-FfmpegOps`,
+      {
+        source: {
+          s3Bucket: args.codeBucket,
+          s3Key: "video-render-ffmpeg-ops.zip",
+        },
+        architecture: Arch.x86,
+        reservedConcurrency: 3,
+        timeout: 300,
+        memory: 512,
+        logs: { retention: 30 },
+        ephemeralStorage: 10240,
+      },
+      { parent: this },
+    );
+
     new aws.iam.PolicyAttachment(
       `${name}-Policy`,
       {
-        roles: [lambdaDocsExtract.role, lambdaCopyIn.role],
+        roles: [lambdaDocsExtract.role, lambdaCopyIn.role, lambdaFfmpeg.role],
         policyArn: lambdaPolicy.arn,
       },
       { parent: this },
