@@ -94,6 +94,7 @@ export default class VideoRender extends pulumi.ComponentResource {
       { parent: this },
     );
 
+    // TODO: Lambda layer for FFMPEG bin
     const lambdaFfmpeg = new GoLambda(
       `${name}-FfmpegOps`,
       {
