@@ -261,14 +261,14 @@ func HandleRequest(ctx context.Context, event Event) (error) {
 
 	videoFile, audioFiles, err := FilterFiles(ctx, stems.Id, event.DriveId)
 
-  bKey := fmt.Sprintf("%svideo.%s", targetKey, filepath.Ext(videoFile.Name))
+  bKey := fmt.Sprintf("%svideo%s", targetKey, filepath.Ext(videoFile.Name))
 	err = drive2s3(ctx, videoFile, targetBucket, bKey)
 	if err != nil {
 		return err
 	}
 
 	for i, audioFile := range audioFiles {
-		bKey := fmt.Sprintf("%saudio_%d.%s", targetKey, i, filepath.Ext(audioFile.Name))
+		bKey := fmt.Sprintf("%saudio_%d%s", targetKey, i, filepath.Ext(audioFile.Name))
 		err = drive2s3(ctx, audioFile, targetBucket, bKey)
 		if err != nil {
 			return err
