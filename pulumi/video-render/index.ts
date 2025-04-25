@@ -94,12 +94,16 @@ export default class VideoRender extends pulumi.ComponentResource {
       { parent: this },
     );
 
-    const ffmpegLayer = new aws.lambda.LayerVersion(`${name}-FfmpegLayer`, {
+    const ffmpegLayer = new aws.lambda.LayerVersion(
+      `${name}-FfmpegLayer`,
+      {
         layerName: "ffmpeg",
         compatibleArchitectures: [Arch.x86],
         s3Bucket: args.codeBucket.id,
         s3Key: "video-render-ffmpeg-layer.zip",
-    }, {parent: this});
+      },
+      { parent: this },
+    );
 
     const lambdaFfmpeg = new GoLambda(
       `${name}-FfmpegOps`,
@@ -187,7 +191,12 @@ export default class VideoRender extends pulumi.ComponentResource {
                       Arguments: {
                         FunctionName:
                           "arn:aws:lambda:eu-north-1:956941652442:function:isha-automations-dev-VideoRender-CopyIn:$LATEST",
-                        Payload: "{% $states.input %}",
+                        Payload: {
+                          sourceDriveFolderId:
+                            "{% $states.input.videoDriveFolderId %}",
+                          driveId: "{% $states.input.videoDriveId %}",
+                          jobId: "{% $jobId %}",
+                        },
                       },
                       Retry: [
                         {
@@ -217,7 +226,12 @@ export default class VideoRender extends pulumi.ComponentResource {
                       Arguments: {
                         FunctionName:
                           "arn:aws:lambda:eu-north-1:956941652442:function:isha-automations-dev-VideoRender-SrtDocsExtract:$LATEST",
-                        Payload: "{% $states.input %}",
+                        Payload: {
+                          sourceDriveFolderId:
+                            "{% $states.input.srtDriveFolderId %}",
+                          driveId: "{% $states.input.srtDriveId %}",
+                          jobId: "{% $jobId %}",
+                        },
                       },
                       Retry: [
                         {
@@ -238,55 +252,42 @@ export default class VideoRender extends pulumi.ComponentResource {
                   },
                 },
               ],
-              Next: "S3 object keys",
               Arguments: {
                 jobId: "{% $jobId %}",
               },
+              Next: "Decode video",
             },
-            "S3 object keys": {
-              Type: "Map",
-              ItemProcessor: {
-                ProcessorConfig: {
-                  Mode: "DISTRIBUTED",
-                  ExecutionType: "STANDARD",
-                },
-                StartAt: "Lambda Invoke",
-                States: {
-                  "Lambda Invoke": {
-                    Type: "Task",
-                    Resource: "arn:aws:states:::lambda:invoke",
-                    Output: "{% $states.result.Payload %}",
-                    Arguments: {
-                      FunctionName: "",
-                      Payload: "{% $states.input %}",
-                    },
-                    Retry: [
-                      {
-                        ErrorEquals: [
-                          "Lambda.ServiceException",
-                          "Lambda.AWSLambdaException",
-                          "Lambda.SdkClientException",
-                          "Lambda.TooManyRequestsException",
-                        ],
-                        IntervalSeconds: 1,
-                        MaxAttempts: 3,
-                        BackoffRate: 2,
-                        JitterStrategy: "FULL",
-                      },
-                    ],
-                    End: true,
-                  },
+            "Decode video": {
+              Type: "Task",
+              Resource: "arn:aws:states:::lambda:invoke",
+              Output: "{% $states.result.Payload %}",
+              Arguments: {
+                FunctionName:
+                  "arn:aws:lambda:eu-north-1:956941652442:function:isha-automations-dev-VideoRender-FfmpegOps:$LATEST",
+                Payload: {
+                  jobId: "{% $jobId %}",
+                  action: "vid2frame",
+                  videoFileBucket: "isha-automations-dev-procfiles-xu2dj",
+                  videoFileKey: "video-render/download/{% $jobId %}/video.mp4",
+                  imgFolderBucket: "isha-automations-dev-procfiles-xu2dj",
+                  imgFolderKey: "video-render/frames/",
+                  metadataKey: "video-render/meta/{% $jobId %}/framerate",
                 },
               },
-              ItemReader: {
-                Resource: "arn:aws:states:::s3:listObjectsV2",
-                Arguments: {
-                  Bucket: "isha-automations-dev-procfiles-xu2dj",
-                  Prefix: "video-render/decompose/",
+              Retry: [
+                {
+                  ErrorEquals: [
+                    "Lambda.ServiceException",
+                    "Lambda.AWSLambdaException",
+                    "Lambda.SdkClientException",
+                    "Lambda.TooManyRequestsException",
+                  ],
+                  IntervalSeconds: 1,
+                  MaxAttempts: 3,
+                  BackoffRate: 2,
+                  JitterStrategy: "FULL",
                 },
-              },
-              MaxConcurrency: 10,
-              Label: "S3objectkeys",
+              ],
               End: true,
             },
           },

@@ -145,11 +145,13 @@ func saveMeta(ctx context.Context, videoFile *os.File, s3Bucket string, metadata
 		"-of", "default=noprint_wrappers=1:nokey=1",
 		videoFile.Name(),
 	)
+
+	var out bytes.Buffer
+	cmd.Stdout = &out
+
 	if err := cmd.Run(); err != nil {
 		return errors.Join(errors.New("Failed ffmpeg describe metadata"), err)
 	}
-	var out bytes.Buffer
-	cmd.Stdout = &out
 
 	rawRate := strings.TrimSpace(out.String())
 
