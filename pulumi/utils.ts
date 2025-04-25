@@ -3,6 +3,7 @@ import * as aws from "@pulumi/aws";
 export interface MetaProps {
   accountId: string;
   region: string;
+  tags: aws.Tags;
 }
 
 export const bucketCommonLifecycleRules = [
@@ -69,7 +70,7 @@ export function addS3BasicRules(
     new aws.s3.BucketLifecycleConfigurationV2(name, {
       bucket: bucket.id,
       rules: bucketCommonLifecycleRules,
-    });
+    }, {parent: bucket});
   }
 
   if (!options?.noPolicy) {
@@ -80,6 +81,7 @@ export function addS3BasicRules(
         policy: bucket.arn.apply(bucketSecureTransportPolicy).json,
       },
       {
+        parent: bucket,
         deleteBeforeReplace: true,
       },
     );

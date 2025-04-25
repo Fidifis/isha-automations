@@ -1,68 +1,48 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import { DMQs } from "./dmqs";
-import * as utils from "./utils";
 import ApiAccess from "./apiAccess";
-import * as fs from "fs";
 import ApigatewayV2 from "./components/apiGateway";
 import VideoRender from "./video-render";
+import CommonRes from "./commonRes";
+import { MetaProps } from "./utils";
 
 async function main() {
-  const meta = {
+  const tags = {
+    project: pulumi.getProject(),
+    env: pulumi.getStack()
+  }
+  const meta: MetaProps = {
     accountId: (await aws.getCallerIdentity({})).accountId,
     region: (await aws.getRegion()).id,
+    tags,
   };
 
-  const codeBucket = new aws.s3.BucketV2("LambdaCode", {
-    bucket: `${pulumi.getProject()}-${pulumi.getStack()}-lambda-code`,
-  });
-  utils.addS3BasicRules("LambdaCodeRules", codeBucket);
+  const { codeBucket, procFilesBucket, gcpConfigParam } = new CommonRes(
+    "CommonRes", tags
+  );
 
-  const procFilesBucket = new aws.s3.BucketV2("ProcFiles");
-  utils.addS3BasicRules("ProcFilesRules", procFilesBucket, {
-    noLifecycle: true,
-  });
-  new aws.s3.BucketLifecycleConfigurationV2("ProcFilesLifecycle", {
-    bucket: procFilesBucket.id,
-    rules: [
-      {
-        id: "DeleteOldFiles",
-        status: "Enabled",
-        expiration: {
-          days: 1,
-        },
-      },
-      ...utils.bucketCommonLifecycleRules,
-    ],
-  });
-
-  const gcpConfigParam = new aws.ssm.Parameter("GCPAccessConfig", {
-    name: `/isha/${pulumi.getStack()}/gcp-fed/lib-config`,
-    description:
-      "Client library config file for GCP federation to impersonate Google service account",
-    type: aws.ssm.ParameterType.String,
-    value: fs.readFileSync("./clientLibConfig.json", "utf8"),
-  });
-
-  const apiAccessRes = new ApiAccess("ApiAuthorizerPSK", {
+  const { apiAuthorizer } = new ApiAccess("ApiAuthorizerPSK", {
     codeBucket,
     keys: ["GR/cz"],
     meta,
   });
 
   const dmqs = new DMQs("DMQs", {
+    tags,
     codeBucket,
-    apiAuthorizer: apiAccessRes.apiAuthorizer,
+    apiAuthorizer: apiAuthorizer,
   });
   const videoRender = new VideoRender("VideoRender", {
     meta,
     codeBucket,
     procFilesBucket,
-    apiAuthorizer: apiAccessRes.apiAuthorizer,
+    apiAuthorizer: apiAuthorizer,
     gcpConfigParam,
   });
 
   new ApigatewayV2(`prime-Api`, {
+    tags,
     routes: [...videoRender.routes, ...dmqs.routes],
   });
 }

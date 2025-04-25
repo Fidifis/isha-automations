@@ -24,6 +24,7 @@ export const AssumePolicy = aws.iam.getPolicyDocumentOutput({
 });
 
 export interface GoLambdaProps {
+  tags: aws.Tags;
   source: {
     code?: Input<string>;
     s3Key?: Input<string>;
@@ -62,6 +63,7 @@ export class GoLambda extends pulumi.ComponentResource {
       `${name}-Log`,
       {
         name: `/aws/lambda/${lambdaName}`,
+        tags: args.tags,
         retentionInDays: args.logs?.retention ?? 30,
       },
       { parent: this },
@@ -87,6 +89,7 @@ export class GoLambda extends pulumi.ComponentResource {
     this.role = new aws.iam.Role(
       `${name}-ExecRole`,
       {
+        tags: args.tags,
         assumeRolePolicy: AssumePolicy.json,
         inlinePolicies: [loggingPolicy, ...(args.roleInlinePolicies ?? [])],
       },
@@ -102,6 +105,7 @@ export class GoLambda extends pulumi.ComponentResource {
       name,
       {
         // code: builder.asset,
+        tags: args.tags,
         code: args.source.code,
         s3Bucket: args.source.s3Bucket?.id,
         s3Key: args.source.s3Key,

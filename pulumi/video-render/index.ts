@@ -50,6 +50,7 @@ export default class VideoRender extends pulumi.ComponentResource {
     const lambdaCopyIn = new GoLambda(
       `${name}-CopyIn`,
       {
+        tags: args.meta.tags,
         source: {
           s3Bucket: args.codeBucket,
           s3Key: "video-render-copy-in.zip",
@@ -74,6 +75,7 @@ export default class VideoRender extends pulumi.ComponentResource {
     const lambdaDocsExtract = new GoLambda(
       `${name}-SrtDocsExtract`,
       {
+        tags: args.meta.tags,
         source: {
           s3Bucket: args.codeBucket,
           s3Key: "video-render-srt-docs-extract.zip",
@@ -108,6 +110,7 @@ export default class VideoRender extends pulumi.ComponentResource {
     const lambdaFfmpeg = new GoLambda(
       `${name}-FfmpegOps`,
       {
+        tags: args.meta.tags,
         source: {
           s3Bucket: args.codeBucket,
           s3Key: "video-render-ffmpeg-ops.zip",
@@ -135,6 +138,7 @@ export default class VideoRender extends pulumi.ComponentResource {
     const stateRole = new aws.iam.Role(
       `${name}-SFSM`,
       {
+        tags: args.meta.tags,
         assumeRolePolicy: aws.iam.getPolicyDocumentOutput(
           {
             statements: [
@@ -166,6 +170,7 @@ export default class VideoRender extends pulumi.ComponentResource {
     new aws.sfn.StateMachine(
       `${name}`,
       {
+        tags: args.meta.tags,
         roleArn: stateRole.arn,
         definition: JSON.stringify({
           Comment: "A description of my state machine",

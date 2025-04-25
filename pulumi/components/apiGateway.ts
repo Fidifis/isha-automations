@@ -12,6 +12,7 @@ export interface ApiGatewayRoute {
 
 export interface ApiGatewayV2Props {
   name?: Input<string>;
+  tags: aws.Tags;
   description?: Input<string>;
   routes: ApiGatewayRoute[];
   corsConfig?: {
@@ -26,7 +27,6 @@ export interface ApiGatewayV2Props {
     name?: Input<string>;
     autoDeployEnabled?: Input<boolean>;
   };
-  tags?: { [key: string]: Input<string> };
 }
 
 export default class ApiGatewayV2 extends pulumi.ComponentResource {
@@ -47,6 +47,7 @@ export default class ApiGatewayV2 extends pulumi.ComponentResource {
     this.apiGateway = new aws.apigatewayv2.Api(
       name,
       {
+        tags: args.tags,
         protocolType: "HTTP",
         name: args.name,
         description: args.description,
@@ -60,7 +61,6 @@ export default class ApiGatewayV2 extends pulumi.ComponentResource {
               allowCredentials: args.corsConfig.allowCredentials || false,
             }
           : undefined,
-        tags: args.tags,
       },
       { parent: this },
     );

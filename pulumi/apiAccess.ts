@@ -21,7 +21,7 @@ export default class ApiAccess extends pulumi.ComponentResource {
     super("fidifis:components:ApiAccess", name, {}, opts);
 
     args.keys.forEach((element) => {
-      this.apiKeyParam(element);
+      this.apiKeyParam(element, args.meta.tags);
     });
 
     const lambdaPolicy = {
@@ -44,6 +44,7 @@ export default class ApiAccess extends pulumi.ComponentResource {
     const apiAuthorizer = new GoLambda(
       name,
       {
+        tags: args.meta.tags,
         source: {
           s3Bucket: args.codeBucket,
           s3Key: "authorizer-psk.zip",
@@ -67,7 +68,7 @@ export default class ApiAccess extends pulumi.ComponentResource {
     });
   }
 
-  apiKeyParam(keyPath: string) {
+  apiKeyParam(keyPath: string, tags: aws.Tags) {
     const name = keyPath.replace("/", "-");
 
     const password = new random.RandomPassword(
@@ -85,6 +86,7 @@ export default class ApiAccess extends pulumi.ComponentResource {
       {
         name: `/isha/auth/${pulumi.getStack()}/${keyPath}`,
         description: `API key for ${keyPath} team`,
+        tags,
         type: aws.ssm.ParameterType.SecureString,
         value: password.result,
       },

@@ -6,7 +6,7 @@ export class DmqMakerLambda extends pulumi.ComponentResource {
 
   constructor(
     name: string,
-    args: { codeBucket: aws.s3.BucketV2 },
+    args: { codeBucket: aws.s3.BucketV2, tags: aws.Tags },
     opts?: pulumi.ComponentResourceOptions,
   ) {
     super("fidifis:components:MakerLambda", name, {}, opts);
@@ -17,6 +17,7 @@ export class DmqMakerLambda extends pulumi.ComponentResource {
       `${name}-Log`,
       {
         name: `/aws/lambda/${lambdaName}`,
+        tags: args.tags,
         retentionInDays: 30,
       },
       { parent: this },
@@ -48,6 +49,7 @@ export class DmqMakerLambda extends pulumi.ComponentResource {
     const execRole = new aws.iam.Role(
       `${name}-ExecRole`,
       {
+        tags: args.tags,
         assumeRolePolicy: assumeLambda.json,
         inlinePolicies: [
           {
@@ -62,6 +64,7 @@ export class DmqMakerLambda extends pulumi.ComponentResource {
     this.lambda = new aws.lambda.Function(
       `${name}-Lambda`,
       {
+        tags: args.tags,
         s3Bucket: args.codeBucket.id,
         s3Key: "dmq-maker.zip",
         name: lambdaName,

@@ -4,6 +4,7 @@ import { DmqMakerLambda } from "./makerLambda";
 import { ApiGatewayRoute } from "../components/apiGateway";
 
 export interface DMQsProps {
+  tags: aws.Tags;
   codeBucket: aws.s3.BucketV2;
   apiAuthorizer: aws.lambda.Function;
 }
@@ -20,7 +21,7 @@ export class DMQs extends pulumi.ComponentResource {
 
     const makerLambda = new DmqMakerLambda(
       `${name}-MakerLambda`,
-      { codeBucket: args.codeBucket },
+      { codeBucket: args.codeBucket, tags: args.tags },
       { parent: this },
     );
 
