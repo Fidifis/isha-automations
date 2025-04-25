@@ -26,7 +26,6 @@ find . -type f -name go.mod | while read -r gomod; do
     GOOS=$(jq -r ".os // \"$GOOS\"" build.json)
     GOARCH=$(jq -r ".arch // \"$GOARCH\"" build.json)
     CGO_ENABLED=$(jq -r ".cgo // \"$CGO_ENABLED\"" build.json)
-    echo "Using GOOS=$GOOS, GOARCH=$GOARCH"
   fi
 
   go build -ldflags="-s -w" -o /tmp/build/bootstrap
