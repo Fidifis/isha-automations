@@ -10,7 +10,7 @@ export default class CommonRes extends pulumi.ComponentResource {
   public readonly gcpConfigParam: aws.ssm.Parameter;
   public readonly rngLambda: GoLambda;
 
-  constructor(name: string, tags: utils.Tags, opts?: pulumi.ComponentResourceOptions) {
+  constructor(name: string, tags: aws.Tags, opts?: pulumi.ComponentResourceOptions) {
     super("project:components:CommonRes", name, {}, opts);
 
     this.codeBucket = new aws.s3.BucketV2("LambdaCode", {

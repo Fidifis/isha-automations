@@ -18,7 +18,7 @@ export default class ApiAccess extends pulumi.ComponentResource {
     args: ApiAccessProps,
     opts?: pulumi.ComponentResourceOptions,
   ) {
-    super("fidifis:components:ApiAccess", name, {}, opts);
+    super("project:components:ApiAccess", name, {}, opts);
 
     args.keys.forEach((element) => {
       this.apiKeyParam(element, args.meta.tags);

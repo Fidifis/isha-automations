@@ -17,7 +17,7 @@ export class DMQs extends pulumi.ComponentResource {
     args: DMQsProps,
     opts?: pulumi.ComponentResourceOptions,
   ) {
-    super("fidifis:components:DMQ", name, {}, opts);
+    super("project:components:DMQ", name, {}, opts);
 
     const makerLambda = new DmqMakerLambda(
       `${name}-MakerLambda`,

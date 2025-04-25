@@ -20,7 +20,7 @@ export default class VideoRender extends pulumi.ComponentResource {
     args: VideoRenderProps,
     opts?: pulumi.ComponentResourceOptions,
   ) {
-    super("fidifis:components:video-render", name, {}, opts);
+    super("project:components:video-render", name, {}, opts);
 
     const lambdaPolicy = new aws.iam.Policy(
       `${name}-Policy`,
