@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
 if command -v podman &>/dev/null; then
     engine=podman
@@ -13,4 +14,11 @@ $engine run --rm \
   -v ./bin:/build/bin \
   -w /build \
   golang:1.24 \
-  bash -c "apt-get update && apt-get install -y zip curl xz-utils && /build/code/build-go.sh"
+  bash -c "apt-get update && apt-get install -y zip jq && /build/code/build-go.sh"
+
+$engine run --rm \
+  -v ./code:/build/code:ro \
+  -v ./bin:/build/bin \
+  -w /build \
+  debian \
+  bash -c "apt-get update && apt-get install -y zip jq curl xz-utils && /build/code/build-special.sh"

@@ -41,6 +41,7 @@ export interface GoLambdaProps {
   roleInlinePolicies?: Input<aws.types.input.iam.RoleInlinePolicy>[];
   env?: Input<aws.types.input.lambda.FunctionEnvironment>;
   ephemeralStorage?: Input<number>;
+  layers?: Input<string>[];
 }
 
 export class GoLambda extends pulumi.ComponentResource {
@@ -116,6 +117,7 @@ export class GoLambda extends pulumi.ComponentResource {
         ephemeralStorage: {
           size: args.ephemeralStorage ?? 512,
         },
+        layers: args.layers,
       },
       { parent: this },
     );

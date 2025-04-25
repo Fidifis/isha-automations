@@ -94,7 +94,13 @@ export default class VideoRender extends pulumi.ComponentResource {
       { parent: this },
     );
 
-    // TODO: Lambda layer for FFMPEG bin
+    const ffmpegLayer = new aws.lambda.LayerVersion(`${name}-FfmpegLayer`, {
+        layerName: "ffmpeg",
+        compatibleArchitectures: [Arch.x86],
+        s3Bucket: args.codeBucket.id,
+        s3Key: "video-render-ffmpeg-layer.zip",
+    }, {parent: this});
+
     const lambdaFfmpeg = new GoLambda(
       `${name}-FfmpegOps`,
       {
@@ -102,9 +108,10 @@ export default class VideoRender extends pulumi.ComponentResource {
           s3Bucket: args.codeBucket,
           s3Key: "video-render-ffmpeg-ops.zip",
         },
+        layers: [ffmpegLayer.arn],
         architecture: Arch.x86,
         reservedConcurrency: 3,
-        timeout: 300,
+        timeout: 600,
         memory: 512,
         logs: { retention: 30 },
         ephemeralStorage: 10240,
