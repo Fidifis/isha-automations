@@ -62,6 +62,18 @@ export default class CommonRes extends pulumi.ComponentResource {
       { parent: this },
     );
 
+    new aws.resourcegroups.Group("ResourceGroup", {
+      resourceQuery: {
+        query: JSON.stringify({
+          ResourceTypeFilters: ["AWS::AllSupported"],
+          TagFilters: Object.entries(tags).map(([key, value]) => ({
+            Key: key,
+            Values: [value]
+          }))
+        })
+      },
+    });
+
     this.registerOutputs({
       codeBucket: this.codeBucket,
       procFilesBucket: this.procFilesBucket,
