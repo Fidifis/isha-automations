@@ -51,6 +51,7 @@
         # formatter = pkgs.nixfmt-rfc-style;
 
         devShell = pkgs.mkShell {
+          PULUMI_CONFIG_PASSPHRASE = "";
           buildInputs = with pkgs; [
             pulumi
             pulumiPackages.pulumi-language-nodejs

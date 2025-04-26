@@ -190,7 +190,7 @@ export default class VideoRender extends pulumi.ComponentResource {
       {
         tags: args.meta.tags,
         roleArn: stateRole.arn,
-        definition: JSON.stringify({
+        definition: pulumi.jsonStringify({
           Comment: "A description of my state machine",
           StartAt: "jobID",
           States: {
@@ -213,7 +213,7 @@ export default class VideoRender extends pulumi.ComponentResource {
               },
               Arguments: {
                 FunctionName:
-                  `${args.rng.arn}:$LATEST`,
+                  pulumi.interpolate`${args.rng.arn}:$LATEST`,
                 Payload: {
                   length: 5,
                 },
@@ -231,7 +231,7 @@ export default class VideoRender extends pulumi.ComponentResource {
                       Output: "{% $states.result.Payload %}",
                       Arguments: {
                         FunctionName:
-                          `${lambdaCopyIn.lambda.arn}:$LATEST`,
+                          pulumi.interpolate`${lambdaCopyIn.lambda.arn}:$LATEST`,
                         Payload: {
                           sourceDriveFolderId:
                             "{% $states.input.videoDriveFolderId %}",
@@ -263,7 +263,7 @@ export default class VideoRender extends pulumi.ComponentResource {
                       Output: "{% $states.result.Payload %}",
                       Arguments: {
                         FunctionName:
-                          `${lambdaDocsExtract.lambda.arn}:$LATEST`,
+                          pulumi.interpolate`${lambdaDocsExtract.lambda.arn}:$LATEST`,
                         Payload: {
                           sourceDriveFolderId:
                             "{% $states.input.srtDriveFolderId %}",
@@ -295,7 +295,7 @@ export default class VideoRender extends pulumi.ComponentResource {
               Output: "{% $states.result.Payload %}",
               Arguments: {
                 FunctionName:
-                  `${lambdaFfmpeg.lambda.arn}:$LATEST`,
+                  pulumi.interpolate`${lambdaFfmpeg.lambda.arn}:$LATEST`,
                 Payload: {
                   jobId: "{% $jobId %}",
                   action: "vid2frame",
