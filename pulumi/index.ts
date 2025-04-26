@@ -18,7 +18,7 @@ async function main() {
     tags,
   };
 
-  const { codeBucket, procFilesBucket, gcpConfigParam } = new CommonRes(
+  const { codeBucket, procFilesBucket, gcpConfigParam, rngLambda } = new CommonRes(
     "CommonRes", tags
   );
 
@@ -37,7 +37,8 @@ async function main() {
     meta,
     codeBucket,
     procFilesBucket,
-    apiAuthorizer: apiAuthorizer,
+    rng: rngLambda.lambda,
+    apiAuthorizer,
     gcpConfigParam,
   });
 

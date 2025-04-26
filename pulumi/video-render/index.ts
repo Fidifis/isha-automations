@@ -8,6 +8,7 @@ export interface VideoRenderProps {
   meta: MetaProps;
   codeBucket: aws.s3.BucketV2;
   procFilesBucket: aws.s3.BucketV2;
+  rng: aws.lambda.Function;
   apiAuthorizer: aws.lambda.Function;
   gcpConfigParam: aws.ssm.Parameter;
 }
@@ -212,7 +213,7 @@ export default class VideoRender extends pulumi.ComponentResource {
               },
               Arguments: {
                 FunctionName:
-                  "arn:aws:lambda:eu-north-1:956941652442:function:isha-automations-dev-RNG:$LATEST",
+                  `${args.rng.arn}:$LATEST`,
                 Payload: {
                   length: 5,
                 },
@@ -230,7 +231,7 @@ export default class VideoRender extends pulumi.ComponentResource {
                       Output: "{% $states.result.Payload %}",
                       Arguments: {
                         FunctionName:
-                          "arn:aws:lambda:eu-north-1:956941652442:function:isha-automations-dev-VideoRender-CopyIn:$LATEST",
+                          `${lambdaCopyIn.lambda.arn}:$LATEST`,
                         Payload: {
                           sourceDriveFolderId:
                             "{% $states.input.videoDriveFolderId %}",
@@ -241,9 +242,6 @@ export default class VideoRender extends pulumi.ComponentResource {
                       Retry: [
                         {
                           ErrorEquals: [
-                            "Lambda.ServiceException",
-                            "Lambda.AWSLambdaException",
-                            "Lambda.SdkClientException",
                             "Lambda.TooManyRequestsException",
                           ],
                           IntervalSeconds: 1,
@@ -265,7 +263,7 @@ export default class VideoRender extends pulumi.ComponentResource {
                       Output: "{% $states.result.Payload %}",
                       Arguments: {
                         FunctionName:
-                          "arn:aws:lambda:eu-north-1:956941652442:function:isha-automations-dev-VideoRender-SrtDocsExtract:$LATEST",
+                          `${lambdaDocsExtract.lambda.arn}:$LATEST`,
                         Payload: {
                           sourceDriveFolderId:
                             "{% $states.input.srtDriveFolderId %}",
@@ -276,9 +274,6 @@ export default class VideoRender extends pulumi.ComponentResource {
                       Retry: [
                         {
                           ErrorEquals: [
-                            "Lambda.ServiceException",
-                            "Lambda.AWSLambdaException",
-                            "Lambda.SdkClientException",
                             "Lambda.TooManyRequestsException",
                           ],
                           IntervalSeconds: 1,
@@ -300,14 +295,14 @@ export default class VideoRender extends pulumi.ComponentResource {
               Output: "{% $states.result.Payload %}",
               Arguments: {
                 FunctionName:
-                  "arn:aws:lambda:eu-north-1:956941652442:function:isha-automations-dev-VideoRender-FfmpegOps:$LATEST",
+                  `${lambdaFfmpeg.lambda.arn}:$LATEST`,
                 Payload: {
                   jobId: "{% $jobId %}",
                   action: "vid2frame",
-                  videoFileBucket: "isha-automations-dev-procfiles-1w0cl",
+                  videoFileBucket: args.procFilesBucket.id,
                   videoFileKey:
                     "{% 'video-render/download/' & $jobId & '/video.mp4' %}",
-                  imgFolderBucket: "isha-automations-dev-procfiles-1w0cl",
+                  imgFolderBucket: args.procFilesBucket.id,
                   imgFolderKey: "video-render/frames/",
                   metadataKey:
                     "{% 'video-render/meta/' & $jobId & '/framerate' %}",
@@ -316,9 +311,6 @@ export default class VideoRender extends pulumi.ComponentResource {
               Retry: [
                 {
                   ErrorEquals: [
-                    "Lambda.ServiceException",
-                    "Lambda.AWSLambdaException",
-                    "Lambda.SdkClientException",
                     "Lambda.TooManyRequestsException",
                   ],
                   IntervalSeconds: 1,

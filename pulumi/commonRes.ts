@@ -78,6 +78,7 @@ export default class CommonRes extends pulumi.ComponentResource {
       codeBucket: this.codeBucket,
       procFilesBucket: this.procFilesBucket,
       gcpConfigParam: this.gcpConfigParam,
+      rngLambda: this.rngLambda,
     });
   }
 }
