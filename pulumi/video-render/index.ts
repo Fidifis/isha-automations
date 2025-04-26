@@ -163,6 +163,23 @@ export default class VideoRender extends pulumi.ComponentResource {
           },
           { parent: this },
         ).json,
+        inlinePolicies: [
+          {
+            policy: aws.iam.getPolicyDocumentOutput(
+              {
+                statements: [
+                  {
+                    actions: ["lambda:InvokeFunction"],
+                    resources: [
+                      pulumi.interpolate`arn:aws:lambda:${args.meta.region}:${args.meta.accountId}:function:${pulumi.getProject()}-${pulumi.getStack()}-*`,
+                    ],
+                  },
+                ],
+              },
+              { parent: this },
+            ).json,
+          },
+        ],
       },
       { parent: this },
     );
@@ -174,13 +191,31 @@ export default class VideoRender extends pulumi.ComponentResource {
         roleArn: stateRole.arn,
         definition: JSON.stringify({
           Comment: "A description of my state machine",
-          StartAt: "Pass",
+          StartAt: "jobID",
           States: {
-            Pass: {
-              Type: "Pass",
+            jobID: {
+              Type: "Task",
+              Resource: "arn:aws:states:::lambda:invoke",
+              Output: "{% $states.input %}",
+              Retry: [
+                {
+                  ErrorEquals: ["Lambda.TooManyRequestsException"],
+                  IntervalSeconds: 1,
+                  MaxAttempts: 3,
+                  BackoffRate: 2,
+                  JitterStrategy: "FULL",
+                },
+              ],
               Next: "Parallel",
               Assign: {
-                jobId: "{% $states.context.Execution.Id %}",
+                jobId: "{% $states.result.Payload.result %}",
+              },
+              Arguments: {
+                FunctionName:
+                  "arn:aws:lambda:eu-north-1:956941652442:function:isha-automations-dev-RNG:$LATEST",
+                Payload: {
+                  length: 5,
+                },
               },
             },
             Parallel: {
@@ -257,9 +292,6 @@ export default class VideoRender extends pulumi.ComponentResource {
                   },
                 },
               ],
-              Arguments: {
-                jobId: "{% $jobId %}",
-              },
               Next: "Decode video",
             },
             "Decode video": {
@@ -272,11 +304,13 @@ export default class VideoRender extends pulumi.ComponentResource {
                 Payload: {
                   jobId: "{% $jobId %}",
                   action: "vid2frame",
-                  videoFileBucket: "isha-automations-dev-procfiles-xu2dj",
-                  videoFileKey: "video-render/download/{% $jobId %}/video.mp4",
-                  imgFolderBucket: "isha-automations-dev-procfiles-xu2dj",
+                  videoFileBucket: "isha-automations-dev-procfiles-1w0cl",
+                  videoFileKey:
+                    "{% 'video-render/download/' & $jobId & '/video.mp4' %}",
+                  imgFolderBucket: "isha-automations-dev-procfiles-1w0cl",
                   imgFolderKey: "video-render/frames/",
-                  metadataKey: "video-render/meta/{% $jobId %}/framerate",
+                  metadataKey:
+                    "{% 'video-render/meta/' & $jobId & '/framerate' %}",
                 },
               },
               Retry: [
