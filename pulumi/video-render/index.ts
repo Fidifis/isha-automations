@@ -304,8 +304,7 @@ export default class VideoRender extends pulumi.ComponentResource {
                     "{% 'video-render/download/' & $jobId & '/video.mp4' %}",
                   imgFolderBucket: args.procFilesBucket.id,
                   imgFolderKey: "video-render/frames/",
-                  metadataKey:
-                    "{% 'video-render/meta/' & $jobId & '/framerate' %}",
+                  metadataKey: "video-render/meta/",
                 },
               },
               Retry: [

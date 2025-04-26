@@ -174,14 +174,15 @@ func saveMeta(ctx context.Context, videoFile *os.File, s3Bucket string, metadata
 	}
 
 	log.Debugf("Frame rate = %f", frameRate)
-	log.Debugf("Upload metadata to s3=%s key=%s", s3Bucket, metadataKey)
+	bkey := fmt.Sprintf("%sframerate", metadataKey)
+	log.Debugf("Upload metadata to s3=%s key=%s", s3Bucket, bkey)
 	_, err := s3c.PutObject(ctx, &s3.PutObjectInput{
 				Bucket: &s3Bucket,
-				Key:    &metadataKey,
+				Key:    &bkey,
 				Body:   bytes.NewReader([]byte(strconv.FormatFloat(frameRate, 'f', -1, 64))),
 			})
 		if err != nil {
-			return errors.Join(fmt.Errorf("Error S3 upload: bucket=%s key=%s", s3Bucket, metadataKey), err)
+			return errors.Join(fmt.Errorf("Error S3 upload: bucket=%s key=%s", s3Bucket, bkey), err)
 		}
 
 	return nil
@@ -194,6 +195,7 @@ func HandleRequest(ctx context.Context, event Event) (error) {
 	}
 
 	framesFolderKey := getBucketKey(event.JobId, event.FrameFolderKey)
+	metadataFolderKey := getBucketKey(event.JobId, event.MetadataKey)
 
 	frameDir, err := os.MkdirTemp("", "frames-")
 	if err != nil {
@@ -215,7 +217,7 @@ func HandleRequest(ctx context.Context, event Event) (error) {
 		if err != nil {
 			return err
 		}
-		err = saveMeta(ctx, videoFile, event.FrameFolderBucket, event.MetadataKey)
+		err = saveMeta(ctx, videoFile, event.FrameFolderBucket, metadataFolderKey)
 		if err != nil {
 			return err
 		}
