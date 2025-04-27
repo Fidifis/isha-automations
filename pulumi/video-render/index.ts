@@ -34,7 +34,13 @@ export default class VideoRender extends pulumi.ComponentResource {
                 resources: [args.gcpConfigParam.arn],
               },
               {
-                actions: ["s3:PutObject", "s3:GetObject", "s3:ListBucket"],
+                actions: ["s3:ListBucket"],
+                resources: [
+                  args.procFilesBucket.arn,
+                ],
+              },
+              {
+                actions: ["s3:PutObject", "s3:GetObject"],
                 resources: [
                   pulumi.interpolate`${args.procFilesBucket.arn}/video-render`,
                   pulumi.interpolate`${args.procFilesBucket.arn}/video-render/*`,

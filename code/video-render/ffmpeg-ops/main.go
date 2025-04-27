@@ -222,7 +222,7 @@ func copyFramesIn(ctx context.Context, framesFolder string, s3Bucket string, s3K
 	for paginator.HasMorePages() {
 		list, err := paginator.NextPage(ctx)
 		if err != nil {
-			return fmt.Errorf("Error listing bucket s3=%s key=%s", s3Bucket, s3Key)
+			return errors.Join(fmt.Errorf("Error listing bucket s3=%s key=%s", s3Bucket, s3Key), err)
 		}
 		for _, object := range list.Contents {
 			fName := fmt.Sprintf("%s/%s", framesFolder, *object.Key)
