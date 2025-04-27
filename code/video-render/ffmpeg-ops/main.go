@@ -202,11 +202,11 @@ func saveMeta(ctx context.Context, videoFile string, s3Bucket string, metadataKe
 
 	// Expected output: "30000/1001\n"
 	framerate := strings.TrimSpace(rawRate)
-
 	log.Infof("Frame rate = %f", framerate)
-	log.Debugf("Upload metadata to s3=%s key=%s%s", s3Bucket, metadataKey, "framerate")
-	objContent := bytes.NewReader([]byte(framerate))
+
 	bKey := fmt.Sprintf("%s%s", metadataKey, "framerate")
+	log.Debugf("Upload metadata to s3=%s key=%s", s3Bucket, bKey)
+	objContent := bytes.NewReader([]byte(framerate))
 	err := s3Put(ctx, s3Bucket, bKey, objContent)
 	if err != nil {
 		return err
@@ -225,7 +225,10 @@ func copyFramesIn(ctx context.Context, framesFolder string, s3Bucket string, s3K
 			return errors.Join(fmt.Errorf("Error listing bucket s3=%s key=%s", s3Bucket, s3Key), err)
 		}
 		for _, object := range list.Contents {
-			fName := fmt.Sprintf("%s/%s", framesFolder, *object.Key)
+			objKeySplit := strings.Split(*object.Key, "/")
+			nameOnly := objKeySplit[len(objKeySplit)-1]
+			fName := fmt.Sprintf("%s/%s", framesFolder, nameOnly)
+
 			frameFile, err := os.OpenFile(fName, os.O_CREATE|os.O_RDWR, 644)
 			if err != nil {
 				return errors.Join(fmt.Errorf("Error creating file %s", fName), err)
