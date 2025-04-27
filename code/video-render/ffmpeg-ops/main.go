@@ -31,7 +31,7 @@ type Event struct {
 
 	VideoFileBucket   string `json:"videoFileBucket"`
 	VideoFileKey      string `json:"videoFileKey"`
-	DownloadFolderKey    string `json:"downloadFolderKey,omitempty"`
+	DownloadFolderKey string `json:"downloadFolderKey,omitempty"`
 	FrameFolderBucket string `json:"imgFolderBucket"`
 	FrameFolderKey    string `json:"imgFolderKey"`
 	MetadataKey       string `json:"metadataKey"`
@@ -265,7 +265,8 @@ func s3CopyInMany(ctx context.Context, systemFolder string, s3Bucket string, s3K
 
 			file, err := os.Create(fName)
 			if err != nil {
-				return errors.Join(fmt.Errorf("Error creating file %s", fName), err)
+				log.Warn("Error hint: if object key seems to be empty or '/' it may be caused by hiden file representing the folder itself, that is created during 'create folder' from UI.\nuse `aws s3 ls s3://` to debug")
+				return errors.Join(fmt.Errorf("Error creating file %s ; objectKey=%s", fName, *object.Key), err)
 			}
 			defer file.Close()
 
