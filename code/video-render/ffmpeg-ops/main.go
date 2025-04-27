@@ -141,13 +141,6 @@ func getMeta(ctx context.Context, s3Bucket string, metadataKey string) (string, 
 func ffmpegEncode(ctx context.Context, videoFile string, frameFolder string, framerate string) error {
 	log.Debug("ffmpeg encoding...")
 	
-	// debug
-	cmd2 := exec.CommandContext(ctx, "sh", "-c", fmt.Sprintf("ls %s | head -n 10", frameFolder))
-	var cmdErr2 bytes.Buffer
-	cmd2.Stdout = &cmdErr2
-	log.Warn(cmdErr2.String())
-	// debug
-
 	cmd := exec.CommandContext(ctx, "ffmpeg", "-loglevel", "error", "-framerate", framerate, "-i", filepath.Join(frameFolder, "frame_%06d.jpg"), "-c:v", "libx264", "-pix_fmt", "yuv420p", videoFile)
 
 	var cmdErr bytes.Buffer
@@ -200,7 +193,7 @@ func copyFramesOut(ctx context.Context, framesFolder string, s3Bucket string, s3
 
 func saveMeta(ctx context.Context, videoFile string, s3Bucket string, metadataKey string) error {
 	log.Debug("Probing frame rate")
-	cmd := exec.Command("ffprobe",
+	cmd := exec.CommandContext(ctx, "ffprobe",
 		"-v", "0",
 		"-select_streams", "v:0",
 		"-show_entries", "stream=r_frame_rate",
@@ -238,9 +231,6 @@ func copyFramesIn(ctx context.Context, framesFolder string, s3Bucket string, s3K
 		Prefix: &s3Key,
 	})
 
-	//debug
-	canLog := true
-
 	for paginator.HasMorePages() {
 		list, err := paginator.NextPage(ctx)
 		if err != nil {
@@ -257,27 +247,11 @@ func copyFramesIn(ctx context.Context, framesFolder string, s3Bucket string, s3K
 			}
 			defer frameFile.Close()
 
-			// debug
-			if canLog {
-				log.Warnf("create file: %s ; check: %s", fName, frameFile.Name())
-			}
-			// debug
-
 			// frameFile.Seek(0, io.SeekStart)
 			err = s3Get(ctx, s3Bucket, *object.Key, frameFile)
 			if err != nil {
 				return err
 			}
-
-			// debug
-			if canLog {
-				cmd2 := exec.CommandContext(ctx, "sh", "-c", fmt.Sprintf("ls %s | head -n 10", framesFolder))
-				var cmdErr2 bytes.Buffer
-				cmd2.Stdout = &cmdErr2
-				log.Warn(cmdErr2.String())
-			}
-				canLog = false
-			// debug
 		}
 	}
 	return nil
