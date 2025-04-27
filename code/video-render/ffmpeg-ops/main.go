@@ -31,7 +31,7 @@ type Event struct {
 
 	VideoFileBucket   string `json:"videoFileBucket"`
 	VideoFileKey      string `json:"videoFileKey"`
-	AudioFolderKey    string `json:"audioFolderKey,omitempty"`
+	DownloadFolderKey    string `json:"downloadFolderKey,omitempty"`
 	FrameFolderBucket string `json:"imgFolderBucket"`
 	FrameFolderKey    string `json:"imgFolderKey"`
 	MetadataKey       string `json:"metadataKey"`
@@ -286,7 +286,7 @@ func HandleRequest(ctx context.Context, event Event) error {
 
 	framesFolderKey := getBucketKey(event.JobId, event.FrameFolderKey)
 	metadataFolderKey := getBucketKey(event.JobId, event.MetadataKey)
-	audioFolderKey := getBucketKey(event.JobId, event.AudioFolderKey)
+	audioFolderKey := fmt.Sprintf("%s/audio/", getBucketKey(event.JobId, event.DownloadFolderKey))
 
 	frameDir, err := os.MkdirTemp("", "frames-")
 	if err != nil {
