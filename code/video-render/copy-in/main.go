@@ -268,7 +268,7 @@ func HandleRequest(ctx context.Context, event Event) (error) {
 	}
 
 	for i, audioFile := range audioFiles {
-		bKey := fmt.Sprintf("%saudio_%d%s", targetKey, i, filepath.Ext(audioFile.Name))
+		bKey := fmt.Sprintf("%saudio/audio_%d%s", targetKey, i, filepath.Ext(audioFile.Name))
 		err = drive2s3(ctx, audioFile, targetBucket, bKey)
 		if err != nil {
 			return err
