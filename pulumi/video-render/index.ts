@@ -126,7 +126,7 @@ export default class VideoRender extends pulumi.ComponentResource {
         architecture: Arch.x86,
         reservedConcurrency: 3,
         timeout: 600,
-        memory: 512,
+        memory: 1024,
         logs: { retention: 30 },
         ephemeralStorage: 10240,
       },
