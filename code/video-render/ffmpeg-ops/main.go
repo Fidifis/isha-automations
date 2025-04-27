@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"go.uber.org/zap"
@@ -35,6 +34,7 @@ type Event struct {
 	FrameFolderBucket string `json:"imgFolderBucket"`
 	FrameFolderKey string `json:"imgFolderKey"`
 	MetadataKey string `json:"metadataKey"`
+	ResultKey string `json:"resultKey"`
 }
 
 func main() {
@@ -80,7 +80,7 @@ func testFFmpeg(ctx context.Context) error {
 	return nil
 }
 
-func s3Get(ctx context.Context, s3Bucket string, s3Key string, file *os.File) error {
+func s3Get(ctx context.Context, s3Bucket string, s3Key string, file io.Writer) error {
 	// no debug logging as it spam for every frame
 	s3File, err := s3c.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(s3Bucket),
@@ -91,10 +91,9 @@ func s3Get(ctx context.Context, s3Bucket string, s3Key string, file *os.File) er
 	}
 	defer s3File.Body.Close()
 
-	file.Seek(0, io.SeekStart)
 	_, err = io.Copy(file, s3File.Body)
 	if err != nil {
-		return errors.Join(fmt.Errorf("Error writing downloaded file from s3=%s key=%s to file=%s", s3Bucket, s3Key, file.Name()), err)
+		return errors.Join(fmt.Errorf("Error writing downloaded file from s3=%s key=%s", s3Bucket, s3Key), err)
 	}
 	return nil
 }
@@ -104,9 +103,40 @@ func copyVideoIn(ctx context.Context, videoFile *os.File, s3Bucket string, s3Key
 	return s3Get(ctx, s3Bucket, s3Key, videoFile)
 }
 
-func ffmpegDecode(ctx context.Context, videoFile *os.File, frameFolder string) error {
+func copyVideoOut(ctx context.Context, videoFileName string, s3Bucket string, s3Key string) error {
+	log.Debugf("Uploading video to s3=%s key=%s from_file=%s", s3Bucket, s3Key, videoFileName)
+	videoFile, err := os.Open(videoFileName)
+	if err != nil {
+		return errors.Join(fmt.Errorf("Cannot open file with result video %s", videoFileName))
+	}
+	defer videoFile.Close()
+	return s3Put(ctx, s3Bucket, s3Key, "out_video.mp4", videoFile)
+}
+
+func ffmpegDecode(ctx context.Context, videoFile string, frameFolder string) error {
 	log.Debug("ffmpeg decoding...")
-	cmd := exec.CommandContext(ctx, "ffmpeg", "-i", videoFile.Name(), "-vsync", "0", frameFolder + "/frame_%06d.jpg")
+	cmd := exec.CommandContext(ctx, "ffmpeg", "-i", videoFile, "-vsync", "0", frameFolder + "/frame_%06d.jpg")
+	if err := cmd.Run(); err != nil {
+		return errors.Join(errors.New("Failed ffmpeg decode to frames"), err)
+	}
+	return nil
+}
+
+func getMeta(ctx context.Context, s3Bucket string, metadataKey string) (string, error) {
+	log.Debugf("Pulling framerate from s3=%s key=%s%s", s3Bucket, metadataKey, "framerate")
+	var buf bytes.Buffer
+	err := s3Get(ctx, s3Bucket, metadataKey + "framerate", &buf)
+	if err != nil {
+		return "", err
+	}
+	framerate := buf.String()
+	framerate = strings.TrimSpace(framerate)
+	return framerate, nil
+}
+
+func ffmpegEncode(ctx context.Context, videoFile string, frameFolder string, framerate string) error {
+	log.Debug("ffmpeg encoding...")
+	cmd := exec.CommandContext(ctx, "ffmpeg", "-framerate", framerate, "-i", frameFolder + "/frame_%06d.jpg", "-c:v", "libx264", "-pix_fmt", "yuv420p", videoFile)
 	if err := cmd.Run(); err != nil {
 		return errors.Join(errors.New("Failed ffmpeg decode to frames"), err)
 	}
@@ -152,15 +182,14 @@ func copyFramesOut(ctx context.Context, framesFolder string, s3Bucket string, s3
 	return err
 }
 
-func saveMeta(ctx context.Context, videoFile *os.File, s3Bucket string, metadataKey string) error {
-	var frameRate float64
+func saveMeta(ctx context.Context, videoFile string, s3Bucket string, metadataKey string) error {
 	log.Debug("Probing frame rate")
 	cmd := exec.Command("ffprobe",
 		"-v", "0",
 		"-select_streams", "v:0",
 		"-show_entries", "stream=r_frame_rate",
 		"-of", "default=noprint_wrappers=1:nokey=1",
-		videoFile.Name(),
+		videoFile,
 	)
 
 	var out bytes.Buffer
@@ -173,26 +202,11 @@ func saveMeta(ctx context.Context, videoFile *os.File, s3Bucket string, metadata
 	rawRate := strings.TrimSpace(out.String())
 
 	// Expected output: "30000/1001\n"
-	parts := strings.Split(rawRate, "/")
-	if len(parts) == 2 {
-		numerator, err1 := strconv.ParseFloat(parts[0], 64)
-		denominator, err2 := strconv.ParseFloat(parts[1], 64)
-		if err1 != nil || err2 != nil || denominator == 0 {
-			return fmt.Errorf("invalid frame rate format: %s", rawRate)
-		}
-		frameRate = numerator / denominator
-	} else if len(parts) == 1 {
-		// It's already a decimal number
-		var err error
-		frameRate, err = strconv.ParseFloat(parts[0], 64)
-		if err != nil {
-			return fmt.Errorf("invalid frame rate format: %s", rawRate)
-		}
-	}
+	framerate := strings.TrimSpace(rawRate)
 
-	log.Infof("Frame rate = %f", frameRate)
+	log.Infof("Frame rate = %f", framerate)
 	log.Debugf("Upload metadata to s3=%s key=%s%s", s3Bucket, metadataKey, "framerate")
-	objContent := bytes.NewReader([]byte(strconv.FormatFloat(frameRate, 'f', -1, 64)))
+	objContent := bytes.NewReader([]byte(framerate))
 	err := s3Put(ctx, s3Bucket, metadataKey, "framerate", objContent)
 	if err != nil {
 		return err
@@ -218,6 +232,7 @@ func copyFramesIn(ctx context.Context, framesFolder string, s3Bucket string, s3K
 			}
 			defer frameFile.Close()
 
+			// frameFile.Seek(0, io.SeekStart)
 			err = s3Get(ctx, s3Bucket, *object.Key, frameFile)
 			if err != nil {
 				return err
@@ -235,12 +250,20 @@ func HandleRequest(ctx context.Context, event Event) (error) {
 
 	framesFolderKey := getBucketKey(event.JobId, event.FrameFolderKey)
 	metadataFolderKey := getBucketKey(event.JobId, event.MetadataKey)
+	resultFolderKey := getBucketKey(event.JobId, event.ResultKey)
 
 	frameDir, err := os.MkdirTemp("", "frames-")
 	if err != nil {
 		return err
 	}
 	defer os.RemoveAll(frameDir)
+
+	resultsDir, err := os.MkdirTemp("", "result-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(resultsDir)
+	resultVideo := filepath.Join(resultsDir, "video.mp4")
 
 	videoFile, err := os.CreateTemp("", "video-")
 	if err != nil {
@@ -256,11 +279,12 @@ func HandleRequest(ctx context.Context, event Event) (error) {
 		if err != nil {
 			return err
 		}
-		err = saveMeta(ctx, videoFile, event.FrameFolderBucket, metadataFolderKey)
+		videoFile.Close() // close so ffmpeg can open
+		err = saveMeta(ctx, videoFile.Name(), event.FrameFolderBucket, metadataFolderKey)
 		if err != nil {
 			return err
 		}
-		err = ffmpegDecode(ctx, videoFile, frameDir)
+		err = ffmpegDecode(ctx, videoFile.Name(), frameDir)
 		if err != nil {
 			return err
 		}
@@ -273,6 +297,16 @@ func HandleRequest(ctx context.Context, event Event) (error) {
 		if err != nil {
 			return err
 		}
+		framerate, err := getMeta(ctx, event.FrameFolderBucket, metadataFolderKey)
+		if err != nil {
+			return err
+		}
+		err = ffmpegEncode(ctx, resultVideo, frameDir, framerate)
+		if err != nil {
+			return err
+		}
+		defer os.Remove(resultVideo)
+		err = copyVideoOut(ctx, resultVideo, event.FrameFolderBucket, resultFolderKey)
 	default:
 		return errors.New("Unknown action " + event.Action)
 	}
