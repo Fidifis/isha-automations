@@ -252,6 +252,7 @@ func s3CopyInMany(ctx context.Context, systemFolder string, s3Bucket string, s3K
 		Prefix: &s3Key,
 	})
 
+	gotAny := false
 	for paginator.HasMorePages() {
 		list, err := paginator.NextPage(ctx)
 		if err != nil {
@@ -273,7 +274,12 @@ func s3CopyInMany(ctx context.Context, systemFolder string, s3Bucket string, s3K
 			if err != nil {
 				return err
 			}
+			gotAny = true
 		}
+	}
+
+	if !gotAny {
+		log.Warnf("Nothing found in s3=%s key=%s", s3Bucket, s3Key)
 	}
 	return nil
 }
@@ -286,7 +292,7 @@ func HandleRequest(ctx context.Context, event Event) error {
 
 	framesFolderKey := getBucketKey(event.JobId, event.FrameFolderKey)
 	metadataFolderKey := getBucketKey(event.JobId, event.MetadataKey)
-	audioFolderKey := fmt.Sprintf("%s/audio/", getBucketKey(event.JobId, event.DownloadFolderKey))
+	audioFolderKey := fmt.Sprintf("%saudio/", getBucketKey(event.JobId, event.DownloadFolderKey))
 
 	frameDir, err := os.MkdirTemp("", "frames-")
 	if err != nil {
@@ -322,6 +328,9 @@ func HandleRequest(ctx context.Context, event Event) error {
 			return err
 		}
 	case "frame2vid":
+		if event.DownloadFolderKey == "" {
+			return errors.New("downloadFolderKey must be specified when action is frame2vid")
+		}
 		audioDir, err := os.MkdirTemp("", "audio-")
 		if err != nil {
 			return err
