@@ -35,9 +35,7 @@ export default class VideoRender extends pulumi.ComponentResource {
               },
               {
                 actions: ["s3:ListBucket"],
-                resources: [
-                  args.procFilesBucket.arn,
-                ],
+                resources: [args.procFilesBucket.arn],
               },
               {
                 actions: ["s3:PutObject", "s3:GetObject"],
@@ -218,8 +216,7 @@ export default class VideoRender extends pulumi.ComponentResource {
                 jobId: "{% $states.result.Payload.result %}",
               },
               Arguments: {
-                FunctionName:
-                  pulumi.interpolate`${args.rng.arn}:$LATEST`,
+                FunctionName: pulumi.interpolate`${args.rng.arn}:$LATEST`,
                 Payload: {
                   length: 5,
                 },
@@ -236,8 +233,7 @@ export default class VideoRender extends pulumi.ComponentResource {
                       Resource: "arn:aws:states:::lambda:invoke",
                       Output: "{% $states.result.Payload %}",
                       Arguments: {
-                        FunctionName:
-                          pulumi.interpolate`${lambdaCopyIn.lambda.arn}:$LATEST`,
+                        FunctionName: pulumi.interpolate`${lambdaCopyIn.lambda.arn}:$LATEST`,
                         Payload: {
                           sourceDriveFolderId:
                             "{% $states.input.videoDriveFolderId %}",
@@ -247,9 +243,7 @@ export default class VideoRender extends pulumi.ComponentResource {
                       },
                       Retry: [
                         {
-                          ErrorEquals: [
-                            "Lambda.TooManyRequestsException",
-                          ],
+                          ErrorEquals: ["Lambda.TooManyRequestsException"],
                           IntervalSeconds: 1,
                           MaxAttempts: 3,
                           BackoffRate: 2,
@@ -268,8 +262,7 @@ export default class VideoRender extends pulumi.ComponentResource {
                       Resource: "arn:aws:states:::lambda:invoke",
                       Output: "{% $states.result.Payload %}",
                       Arguments: {
-                        FunctionName:
-                          pulumi.interpolate`${lambdaDocsExtract.lambda.arn}:$LATEST`,
+                        FunctionName: pulumi.interpolate`${lambdaDocsExtract.lambda.arn}:$LATEST`,
                         Payload: {
                           sourceDriveFolderId:
                             "{% $states.input.srtDriveFolderId %}",
@@ -279,9 +272,7 @@ export default class VideoRender extends pulumi.ComponentResource {
                       },
                       Retry: [
                         {
-                          ErrorEquals: [
-                            "Lambda.TooManyRequestsException",
-                          ],
+                          ErrorEquals: ["Lambda.TooManyRequestsException"],
                           IntervalSeconds: 1,
                           MaxAttempts: 3,
                           BackoffRate: 2,
@@ -300,8 +291,7 @@ export default class VideoRender extends pulumi.ComponentResource {
               Resource: "arn:aws:states:::lambda:invoke",
               Output: "{% $states.result.Payload %}",
               Arguments: {
-                FunctionName:
-                  pulumi.interpolate`${lambdaFfmpeg.lambda.arn}:$LATEST`,
+                FunctionName: pulumi.interpolate`${lambdaFfmpeg.lambda.arn}:$LATEST`,
                 Payload: {
                   jobId: "{% $jobId %}",
                   action: "vid2frame",
@@ -315,9 +305,36 @@ export default class VideoRender extends pulumi.ComponentResource {
               },
               Retry: [
                 {
-                  ErrorEquals: [
-                    "Lambda.TooManyRequestsException",
-                  ],
+                  ErrorEquals: ["Lambda.TooManyRequestsException"],
+                  IntervalSeconds: 1,
+                  MaxAttempts: 3,
+                  BackoffRate: 2,
+                  JitterStrategy: "FULL",
+                },
+              ],
+              Next: "Encode video",
+            },
+            "Encode video": {
+              Type: "Task",
+              Resource: "arn:aws:states:::lambda:invoke",
+              Output: "{% $states.result.Payload %}",
+              Arguments: {
+                FunctionName: pulumi.interpolate`${lambdaFfmpeg.lambda.arn}:$LATEST`,
+                Payload: {
+                  jobId: "{% $jobId %}",
+                  action: "frame2vid",
+                  videoFileBucket: args.procFilesBucket.id,
+                  videoFileKey:
+                    "{% 'video-render/result/' & $jobId & '/video.mp4' %}",
+                  downloadFolderKey: "video-render/download/",
+                  imgFolderBucket: args.procFilesBucket.id,
+                  imgFolderKey: "video-render/frames/",
+                  metadataKey: "video-render/meta/",
+                },
+              },
+              Retry: [
+                {
+                  ErrorEquals: ["Lambda.TooManyRequestsException"],
                   IntervalSeconds: 1,
                   MaxAttempts: 3,
                   BackoffRate: 2,
