@@ -34,7 +34,6 @@ type Event struct {
 	FrameFolderBucket string `json:"imgFolderBucket"`
 	FrameFolderKey string `json:"imgFolderKey"`
 	MetadataKey string `json:"metadataKey"`
-	ResultKey string `json:"resultKey"`
 }
 
 func main() {
@@ -110,7 +109,7 @@ func copyVideoOut(ctx context.Context, videoFileName string, s3Bucket string, s3
 		return errors.Join(fmt.Errorf("Cannot open file with result video %s", videoFileName))
 	}
 	defer videoFile.Close()
-	return s3Put(ctx, s3Bucket, s3Key, "out_video.mp4", videoFile)
+	return s3Put(ctx, s3Bucket, s3Key, videoFile)
 }
 
 func ffmpegDecode(ctx context.Context, videoFile string, frameFolder string) error {
@@ -143,16 +142,15 @@ func ffmpegEncode(ctx context.Context, videoFile string, frameFolder string, fra
 	return nil
 }
 
-func s3Put(ctx context.Context, s3Bucket string, s3Key string, objName string, content io.Reader) error {
+func s3Put(ctx context.Context, s3Bucket string, s3Key string, content io.Reader) error {
 	// no debug logging as it spam for every frame
-	bKey := fmt.Sprintf("%s%s", s3Key, objName)
 	_, err := s3c.PutObject(ctx, &s3.PutObjectInput{
 			Bucket: &s3Bucket,
-			Key:    &bKey,
+			Key:    &s3Key,
 			Body:   content,
 		})
 	if err != nil {
-		return errors.Join(fmt.Errorf("Error S3 upload: bucket=%s key=%s file: %s", s3Bucket, bKey, objName), err)
+		return errors.Join(fmt.Errorf("Error S3 upload: bucket=%s key=%s", s3Bucket, s3Key), err)
 	}
 	return nil
 }
@@ -171,7 +169,8 @@ func copyFramesOut(ctx context.Context, framesFolder string, s3Bucket string, s3
 		}
 		defer file.Close()
 		
-		err = s3Put(ctx, s3Bucket, s3Key, entry.Name(), file)
+		bKey := fmt.Sprintf("%s%s", s3Key, entry.Name())
+		err = s3Put(ctx, s3Bucket, bKey, file)
 		if err != nil {
 			return err
 		}
@@ -207,7 +206,8 @@ func saveMeta(ctx context.Context, videoFile string, s3Bucket string, metadataKe
 	log.Infof("Frame rate = %f", framerate)
 	log.Debugf("Upload metadata to s3=%s key=%s%s", s3Bucket, metadataKey, "framerate")
 	objContent := bytes.NewReader([]byte(framerate))
-	err := s3Put(ctx, s3Bucket, metadataKey, "framerate", objContent)
+	bKey := fmt.Sprintf("%s%s", metadataKey, "framerate")
+	err := s3Put(ctx, s3Bucket, bKey, objContent)
 	if err != nil {
 		return err
 	}
@@ -250,7 +250,6 @@ func HandleRequest(ctx context.Context, event Event) (error) {
 
 	framesFolderKey := getBucketKey(event.JobId, event.FrameFolderKey)
 	metadataFolderKey := getBucketKey(event.JobId, event.MetadataKey)
-	resultFolderKey := getBucketKey(event.JobId, event.ResultKey)
 
 	frameDir, err := os.MkdirTemp("", "frames-")
 	if err != nil {
@@ -258,24 +257,17 @@ func HandleRequest(ctx context.Context, event Event) (error) {
 	}
 	defer os.RemoveAll(frameDir)
 
-	resultsDir, err := os.MkdirTemp("", "result-")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(resultsDir)
-	resultVideo := filepath.Join(resultsDir, "video.mp4")
-
-	videoFile, err := os.CreateTemp("", "video-")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(videoFile.Name())
-	defer videoFile.Close()
-
 	log.Infof("Action: %s", event.Action)
 	switch event.Action {
 	case "vid2frame":
-		err := copyVideoIn(ctx, videoFile, event.VideoFileBucket, event.VideoFileKey)
+		videoFile, err := os.CreateTemp("", "video-")
+		if err != nil {
+			return err
+		}
+		defer os.Remove(videoFile.Name())
+		defer videoFile.Close()
+
+		err = copyVideoIn(ctx, videoFile, event.VideoFileBucket, event.VideoFileKey)
 		if err != nil {
 			return err
 		}
@@ -293,7 +285,14 @@ func HandleRequest(ctx context.Context, event Event) (error) {
 			return err
 		}
 	case "frame2vid":
-		err := copyFramesIn(ctx, frameDir, event.FrameFolderBucket, framesFolderKey)
+		resultsDir, err := os.MkdirTemp("", "result-")
+		if err != nil {
+			return err
+		}
+		defer os.RemoveAll(resultsDir)
+		resultVideo := filepath.Join(resultsDir, "video.mp4")
+
+		err = copyFramesIn(ctx, frameDir, event.FrameFolderBucket, framesFolderKey)
 		if err != nil {
 			return err
 		}
@@ -306,7 +305,7 @@ func HandleRequest(ctx context.Context, event Event) (error) {
 			return err
 		}
 		defer os.Remove(resultVideo)
-		err = copyVideoOut(ctx, resultVideo, event.FrameFolderBucket, resultFolderKey)
+		err = copyVideoOut(ctx, resultVideo, event.VideoFileBucket, event.VideoFileKey)
 	default:
 		return errors.New("Unknown action " + event.Action)
 	}
