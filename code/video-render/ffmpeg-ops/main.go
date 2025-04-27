@@ -114,9 +114,13 @@ func copyVideoOut(ctx context.Context, videoFileName string, s3Bucket string, s3
 
 func ffmpegDecode(ctx context.Context, videoFile string, frameFolder string) error {
 	log.Debug("ffmpeg decoding...")
-	cmd := exec.CommandContext(ctx, "ffmpeg", "-i", videoFile, "-vsync", "0", frameFolder + "/frame_%06d.jpg")
+	cmd := exec.CommandContext(ctx, "ffmpeg", "-loglevel", "error", "-i", videoFile, "-vsync", "0", filepath.Join(frameFolder, "frame_%06d.jpg"))
+
+	var cmdErr bytes.Buffer
+	cmd.Stderr = &cmdErr
+
 	if err := cmd.Run(); err != nil {
-		return errors.Join(errors.New("Failed ffmpeg decode to frames"), err)
+		return errors.Join(fmt.Errorf("Failed ffmpeg decode to frames. Logs:\n%s", cmdErr.String()), err)
 	}
 	return nil
 }
@@ -130,14 +134,27 @@ func getMeta(ctx context.Context, s3Bucket string, metadataKey string) (string, 
 	}
 	framerate := buf.String()
 	framerate = strings.TrimSpace(framerate)
+	log.Infof("framerate = %s", framerate)
 	return framerate, nil
 }
 
 func ffmpegEncode(ctx context.Context, videoFile string, frameFolder string, framerate string) error {
 	log.Debug("ffmpeg encoding...")
-	cmd := exec.CommandContext(ctx, "ffmpeg", "-framerate", framerate, "-i", frameFolder + "/frame_%06d.jpg", "-c:v", "libx264", "-pix_fmt", "yuv420p", videoFile)
+	
+	// debug
+	cmd2 := exec.CommandContext(ctx, "sh", "-c", fmt.Sprintf("ls %s | head -n 10", frameFolder))
+	var cmdErr2 bytes.Buffer
+	cmd2.Stdout = &cmdErr2
+	log.Warn(cmdErr2.String())
+	// debug
+
+	cmd := exec.CommandContext(ctx, "ffmpeg", "-loglevel", "error", "-framerate", framerate, "-i", filepath.Join(frameFolder, "frame_%06d.jpg"), "-c:v", "libx264", "-pix_fmt", "yuv420p", videoFile)
+
+	var cmdErr bytes.Buffer
+	cmd.Stderr = &cmdErr
+
 	if err := cmd.Run(); err != nil {
-		return errors.Join(errors.New("Failed ffmpeg decode to frames"), err)
+		return errors.Join(fmt.Errorf("Failed ffmpeg encode to video. Logs:\n%s", cmdErr.String()), err)
 	}
 	return nil
 }
@@ -202,7 +219,7 @@ func saveMeta(ctx context.Context, videoFile string, s3Bucket string, metadataKe
 
 	// Expected output: "30000/1001\n"
 	framerate := strings.TrimSpace(rawRate)
-	log.Infof("Frame rate = %f", framerate)
+	log.Infof("framerate = %f", framerate)
 
 	bKey := fmt.Sprintf("%s%s", metadataKey, "framerate")
 	log.Debugf("Upload metadata to s3=%s key=%s", s3Bucket, bKey)
@@ -215,10 +232,15 @@ func saveMeta(ctx context.Context, videoFile string, s3Bucket string, metadataKe
 }
 
 func copyFramesIn(ctx context.Context, framesFolder string, s3Bucket string, s3Key string) error {
+	log.Debugf("Download frames to folder=%s s3=%s key=%s", framesFolder, s3Bucket, s3Key)
 	paginator := s3.NewListObjectsV2Paginator(s3c, &s3.ListObjectsV2Input{
 		Bucket: &s3Bucket,
 		Prefix: &s3Key,
 	})
+
+	//debug
+	canLog := true
+
 	for paginator.HasMorePages() {
 		list, err := paginator.NextPage(ctx)
 		if err != nil {
@@ -227,19 +249,35 @@ func copyFramesIn(ctx context.Context, framesFolder string, s3Bucket string, s3K
 		for _, object := range list.Contents {
 			objKeySplit := strings.Split(*object.Key, "/")
 			nameOnly := objKeySplit[len(objKeySplit)-1]
-			fName := fmt.Sprintf("%s/%s", framesFolder, nameOnly)
+			fName := filepath.Join(framesFolder, nameOnly)
 
-			frameFile, err := os.OpenFile(fName, os.O_CREATE|os.O_RDWR, 644)
+			frameFile, err := os.Create(fName)
 			if err != nil {
 				return errors.Join(fmt.Errorf("Error creating file %s", fName), err)
 			}
 			defer frameFile.Close()
+
+			// debug
+			if canLog {
+				log.Warnf("create file: %s ; check: %s", fName, frameFile.Name())
+			}
+			// debug
 
 			// frameFile.Seek(0, io.SeekStart)
 			err = s3Get(ctx, s3Bucket, *object.Key, frameFile)
 			if err != nil {
 				return err
 			}
+
+			// debug
+			if canLog {
+				cmd2 := exec.CommandContext(ctx, "sh", "-c", fmt.Sprintf("ls %s | head -n 10", framesFolder))
+				var cmdErr2 bytes.Buffer
+				cmd2.Stdout = &cmdErr2
+				log.Warn(cmdErr2.String())
+			}
+				canLog = false
+			// debug
 		}
 	}
 	return nil
@@ -309,6 +347,9 @@ func HandleRequest(ctx context.Context, event Event) (error) {
 		}
 		defer os.Remove(resultVideo)
 		err = copyVideoOut(ctx, resultVideo, event.VideoFileBucket, event.VideoFileKey)
+		if err != nil {
+			return err
+		}
 	default:
 		return errors.New("Unknown action " + event.Action)
 	}
