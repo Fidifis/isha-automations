@@ -216,7 +216,7 @@ func HandleRequest(ctx context.Context, event Event) (error) {
 	}
 	srt = strings.ReplaceAll(srt, "\v", "\n") // replace vertical tab
 
-  bKey := fmt.Sprintf("%s%s", targetKey, "cz.srt")
+  bKey := fmt.Sprintf("%s%s", targetKey, "subtitles.srt")
 	_, err = s3c.PutObject(ctx, &s3.PutObjectInput{
 			Bucket: &targetBucket,
 			Key:    &bKey,
