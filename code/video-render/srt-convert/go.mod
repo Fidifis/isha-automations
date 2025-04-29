@@ -1,4 +1,4 @@
-module ffmpegburn
+module srtconvert
 
 go 1.23.6
 

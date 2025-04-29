@@ -101,13 +101,10 @@ func copyVideoIn(ctx context.Context, videoFile *os.File, s3Bucket string, s3Key
 			return errors.Join(fmt.Errorf("Error listing bucket s3=%s key=%s", s3Bucket, s3Key), err)
 		}
 		for _, object := range list.Contents {
-			// objKeySplit := strings.Split(*object.Key, "/")
-			// nameOnly := objKeySplit[len(objKeySplit)-1]
-			// extension := filepath.Ext(nameOnly)
 			return s3Get(ctx, s3Bucket, *object.Key, videoFile)
 		}
 	}
-	return fmt.Errorf("Nothing returned while listing bucket s3=%s key=%s", s3Bucket, s3Key)
+	return fmt.Errorf("Nothing returned while looking for video, listing bucket s3=%s key=%s", s3Bucket, s3Key)
 }
 
 func copyVideoOut(ctx context.Context, videoFileName string, s3Bucket string, s3Key string) error {
@@ -125,7 +122,7 @@ func getAss(ctx context.Context, assFile *os.File, s3Bucket string, s3Key string
 	return s3Get(ctx, s3Bucket, s3Key, assFile)
 }
 
-func ffmpegEncode(ctx context.Context, inVideoFile string, audioFolder string, assFile string, outVideoFile string) error {
+func ffmpegRender(ctx context.Context, inVideoFile string, audioFolder string, assFile string, outVideoFile string) error {
 	args := []string{
 		"-loglevel", "error",
 		"-i", inVideoFile,
@@ -267,7 +264,7 @@ func HandleRequest(ctx context.Context, event Event) error {
 		return err
 	}
 
-	err = ffmpegEncode(ctx, videoFile.Name(), audioDir, assFile.Name(), resultVideo)
+	err = ffmpegRender(ctx, videoFile.Name(), audioDir, assFile.Name(), resultVideo)
 	if err != nil {
 		return err
 	}
