@@ -9,6 +9,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"go.uber.org/zap"
@@ -59,8 +61,14 @@ func testFFmpeg(ctx context.Context) error {
 	return nil
 }
 
-func s3Get(ctx context.Context, s3Bucket string, s3Key string, file io.Writer) error {
+func s3Get(ctx context.Context, s3Bucket string, s3Key string, file string) error {
 	log.Debugf("getObject s3=%s key=%s", s3Bucket, s3Key)
+	fileHandle, err := os.Create(file)
+	if err != nil {
+		return errors.Join(fmt.Errorf("Error create a file for the download file=%s s3=%s key=%s", file, s3Bucket, s3Key), err)
+	}
+	defer fileHandle.Close()
+
 	s3File, err := s3c.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(s3Bucket),
 		Key:    aws.String(s3Key),
@@ -70,11 +78,39 @@ func s3Get(ctx context.Context, s3Bucket string, s3Key string, file io.Writer) e
 	}
 	defer s3File.Body.Close()
 
-	_, err = io.Copy(file, s3File.Body)
+	_, err = io.Copy(fileHandle, s3File.Body)
 	if err != nil {
 		return errors.Join(fmt.Errorf("Error writing downloaded file from s3=%s key=%s", s3Bucket, s3Key), err)
 	}
 	return nil
+}
+
+func fixSrtFormatting(srt string) string {
+	lines := strings.Split(srt, "\n")
+
+	regex := regexp.MustCompile(`\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}`)
+	var newLines []string
+	var segmentNumber string
+	for _, line := range lines {
+		trimed := strings.TrimSpace(line)
+
+		if trimed != "" {
+			if segmentNumber != "" {
+				if len(newLines) != 0 && regex.FindString(trimed) != "" {
+					newLines = append(newLines, "")
+				}
+				newLines = append(newLines, segmentNumber)
+				segmentNumber = ""
+			}
+			if _, parsErr := strconv.ParseInt(trimed, 10, 64); parsErr == nil {
+				segmentNumber = trimed
+			} else {
+				newLines = append(newLines, trimed)
+			}
+		}
+	}
+
+	return strings.Join(newLines, "\n")
 }
 
 func ffmpegConvert(ctx context.Context, srtFile string, assFile string) error {
@@ -156,13 +192,18 @@ func s3Put(ctx context.Context, s3Bucket string, s3Key string, content io.Reader
 	return nil
 }
 
-func copyAssOut(ctx context.Context, s3Bucket string, s3Key string, assFile string) error {
-	ass, err := os.Open(assFile)
+func fixSrtFile(srtFile string) error {
+	file, err := os.ReadFile(srtFile)
 	if err != nil {
-		return errors.Join(fmt.Errorf("Cannot open file with result video %s", assFile))
+		return errors.Join(fmt.Errorf("Failed to open srt file (fix formatting func) file=%s", srtFile), err)
 	}
-	defer ass.Close()
-	return s3Put(ctx, s3Bucket, s3Key, ass)
+	srt := string(file)
+	fixed := fixSrtFormatting(srt)
+	err = os.WriteFile(srtFile, []byte(fixed), 0644)
+	if err != nil {
+		return errors.Join(fmt.Errorf("Failed to save srt file (fix formatting func) file=%s", srtFile), err)
+	}
+	return nil
 }
 
 func HandleRequest(ctx context.Context, event Event) error {
@@ -171,12 +212,13 @@ func HandleRequest(ctx context.Context, event Event) error {
 		return err
 	}
 
-	srtFile, err := os.CreateTemp("", "srt-")
+	downloadsDir, err := os.MkdirTemp("", "downloads-")
 	if err != nil {
 		return err
 	}
-	defer os.Remove(srtFile.Name())
-	defer srtFile.Close()
+	defer os.RemoveAll(downloadsDir)
+	srtFile := filepath.Join(downloadsDir, "subtitles.srt")
+	defer os.Remove(srtFile)
 
 	resultsDir, err := os.MkdirTemp("", "result-")
 	if err != nil {
@@ -190,9 +232,13 @@ func HandleRequest(ctx context.Context, event Event) error {
 	if err != nil {
 		return err
 	}
-	srtFile.Close() // close so ffmpeg can open
 
-	err = ffmpegConvert(ctx, srtFile.Name(), assFile)
+	err = fixSrtFile(srtFile)
+	if err != nil {
+		return err
+	}
+
+	err = ffmpegConvert(ctx, srtFile, assFile)
 	if err != nil {
 		return err
 	}
