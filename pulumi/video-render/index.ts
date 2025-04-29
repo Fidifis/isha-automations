@@ -59,7 +59,7 @@ export default class VideoRender extends pulumi.ComponentResource {
         source: {
           s3Bucket: args.codeBucket,
           s3Key: "video-render-copy-in.zip",
-          hash: HashFolder("../code/video-render/copy-in/")
+          hash: HashFolder("../code/video-render/copy-in/"),
         },
         architecture: Arch.arm,
         reservedConcurrency: 20,
@@ -85,7 +85,7 @@ export default class VideoRender extends pulumi.ComponentResource {
         source: {
           s3Bucket: args.codeBucket,
           s3Key: "video-render-srt-docs-extract.zip",
-          hash: HashFolder("../code/video-render/srt-docs-extract/")
+          hash: HashFolder("../code/video-render/srt-docs-extract/"),
         },
         architecture: Arch.arm,
         reservedConcurrency: 20,
@@ -110,7 +110,7 @@ export default class VideoRender extends pulumi.ComponentResource {
         compatibleArchitectures: [Arch.x86],
         s3Bucket: args.codeBucket.id,
         s3Key: "video-render-ffmpeg-layer.zip",
-        sourceCodeHash: HashFolder("../code/video-render/ffmpeg-layer/")
+        sourceCodeHash: HashFolder("../code/video-render/ffmpeg-layer/"),
       },
       { parent: this },
     );
@@ -122,7 +122,7 @@ export default class VideoRender extends pulumi.ComponentResource {
         source: {
           s3Bucket: args.codeBucket,
           s3Key: "video-render-srt-convert.zip",
-          hash: HashFolder("../code/video-render/srt-convert/")
+          hash: HashFolder("../code/video-render/srt-convert/"),
         },
         layers: [ffmpegLayer.arn],
         architecture: Arch.x86,
@@ -140,7 +140,7 @@ export default class VideoRender extends pulumi.ComponentResource {
         source: {
           s3Bucket: args.codeBucket,
           s3Key: "video-render-ffmpeg-burn.zip",
-          hash: HashFolder("../code/video-render/ffmpeg-burn/")
+          hash: HashFolder("../code/video-render/ffmpeg-burn/"),
         },
         layers: [ffmpegLayer.arn],
         architecture: Arch.x86,
@@ -156,7 +156,12 @@ export default class VideoRender extends pulumi.ComponentResource {
     new aws.iam.PolicyAttachment(
       `${name}-Policy`,
       {
-        roles: [lambdaDocsExtract.role, lambdaCopyIn.role, lambdaConvertSrt.role, lambdaFfmpegBurn.role],
+        roles: [
+          lambdaDocsExtract.role,
+          lambdaCopyIn.role,
+          lambdaConvertSrt.role,
+          lambdaFfmpegBurn.role,
+        ],
         policyArn: lambdaPolicy.arn,
       },
       { parent: this },
@@ -301,14 +306,39 @@ export default class VideoRender extends pulumi.ComponentResource {
                           JitterStrategy: "FULL",
                         },
                       ],
+                      Next: "Convert SRT",
+                    },
+                    "Convert SRT": {
+                      Type: "Task",
+                      Resource: "arn:aws:states:::lambda:invoke",
+                      Output: "{% $states.result.Payload %}",
+                      Arguments: {
+                        FunctionName: pulumi.interpolate`${lambdaConvertSrt.lambda.arn}:$LATEST`,
+                        Payload: {
+                          bucket: args.procFilesBucket.id,
+                          sourceKey:
+                            "{% 'video-render/download/' & $jobId & '/subtitles.srt' %}",
+                          destKey:
+                            "{% 'video-render/download/' & $jobId & '/subtitles.ass' %}",
+                        },
+                      },
+                      Retry: [
+                        {
+                          ErrorEquals: ["Lambda.TooManyRequestsException"],
+                          IntervalSeconds: 1,
+                          MaxAttempts: 3,
+                          BackoffRate: 2,
+                          JitterStrategy: "FULL",
+                        },
+                      ],
                       End: true,
                     },
                   },
                 },
               ],
-              Next: "Decode video",
+              Next: "Burn to video",
             },
-            "Decode video": {
+            "Burn to video": {
               Type: "Task",
               Resource: "arn:aws:states:::lambda:invoke",
               Output: "{% $states.result.Payload %}",
@@ -316,42 +346,9 @@ export default class VideoRender extends pulumi.ComponentResource {
                 FunctionName: pulumi.interpolate`${lambdaFfmpegBurn.lambda.arn}:$LATEST`,
                 Payload: {
                   jobId: "{% $jobId %}",
-                  action: "vid2frame",
-                  videoFileBucket: args.procFilesBucket.id,
-                  videoFileKey:
-                    "{% 'video-render/download/' & $jobId & '/video.mp4' %}",
-                  imgFolderBucket: args.procFilesBucket.id,
-                  imgFolderKey: "video-render/frames/",
-                  metadataKey: "video-render/meta/",
-                },
-              },
-              Retry: [
-                {
-                  ErrorEquals: ["Lambda.TooManyRequestsException"],
-                  IntervalSeconds: 1,
-                  MaxAttempts: 3,
-                  BackoffRate: 2,
-                  JitterStrategy: "FULL",
-                },
-              ],
-              Next: "Encode video",
-            },
-            "Encode video": {
-              Type: "Task",
-              Resource: "arn:aws:states:::lambda:invoke",
-              Output: "{% $states.result.Payload %}",
-              Arguments: {
-                FunctionName: pulumi.interpolate`${lambdaFfmpegBurn.lambda.arn}:$LATEST`,
-                Payload: {
-                  jobId: "{% $jobId %}",
-                  action: "frame2vid",
-                  videoFileBucket: args.procFilesBucket.id,
-                  videoFileKey:
-                    "{% 'video-render/result/' & $jobId & '/video.mp4' %}",
+                  bucket: args.procFilesBucket.id,
                   downloadFolderKey: "video-render/download/",
-                  imgFolderBucket: args.procFilesBucket.id,
-                  imgFolderKey: "video-render/frames/",
-                  metadataKey: "video-render/meta/",
+                  resultFolderKey: "video-render/meta/",
                 },
               },
               Retry: [
