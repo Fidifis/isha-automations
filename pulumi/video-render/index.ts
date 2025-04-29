@@ -1,7 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import { ApiGatewayRoute } from "../components/apiGateway";
-import { Arch, GoLambda } from "../components/lambda";
+import { Arch, GoLambda, HashFolder } from "../components/lambda";
 import { MetaProps } from "../utils";
 
 export interface VideoRenderProps {
@@ -59,6 +59,7 @@ export default class VideoRender extends pulumi.ComponentResource {
         source: {
           s3Bucket: args.codeBucket,
           s3Key: "video-render-copy-in.zip",
+          hash: HashFolder("../code/video-render/copy-in/")
         },
         architecture: Arch.arm,
         reservedConcurrency: 20,
@@ -84,6 +85,7 @@ export default class VideoRender extends pulumi.ComponentResource {
         source: {
           s3Bucket: args.codeBucket,
           s3Key: "video-render-srt-docs-extract.zip",
+          hash: HashFolder("../code/video-render/srt-docs-extract/")
         },
         architecture: Arch.arm,
         reservedConcurrency: 20,
@@ -108,17 +110,37 @@ export default class VideoRender extends pulumi.ComponentResource {
         compatibleArchitectures: [Arch.x86],
         s3Bucket: args.codeBucket.id,
         s3Key: "video-render-ffmpeg-layer.zip",
+        sourceCodeHash: HashFolder("../code/video-render/ffmpeg-layer/")
       },
       { parent: this },
     );
 
-    const lambdaFfmpeg = new GoLambda(
-      `${name}-FfmpegOps`,
+    const lambdaConvertSrt = new GoLambda(
+      `${name}-ConvertSrt`,
       {
         tags: args.meta.tags,
         source: {
           s3Bucket: args.codeBucket,
-          s3Key: "video-render-ffmpeg-ops.zip",
+          s3Key: "video-render-srt-convert.zip",
+          hash: HashFolder("../code/video-render/srt-convert/")
+        },
+        layers: [ffmpegLayer.arn],
+        architecture: Arch.x86,
+        timeout: 60,
+        memory: 256,
+        logs: { retention: 30 },
+      },
+      { parent: this },
+    );
+
+    const lambdaFfmpegBurn = new GoLambda(
+      `${name}-FfmpegBurn`,
+      {
+        tags: args.meta.tags,
+        source: {
+          s3Bucket: args.codeBucket,
+          s3Key: "video-render-ffmpeg-burn.zip",
+          hash: HashFolder("../code/video-render/ffmpeg-burn/")
         },
         layers: [ffmpegLayer.arn],
         architecture: Arch.x86,
@@ -134,7 +156,7 @@ export default class VideoRender extends pulumi.ComponentResource {
     new aws.iam.PolicyAttachment(
       `${name}-Policy`,
       {
-        roles: [lambdaDocsExtract.role, lambdaCopyIn.role, lambdaFfmpeg.role],
+        roles: [lambdaDocsExtract.role, lambdaCopyIn.role, lambdaConvertSrt.role, lambdaFfmpegBurn.role],
         policyArn: lambdaPolicy.arn,
       },
       { parent: this },
@@ -291,7 +313,7 @@ export default class VideoRender extends pulumi.ComponentResource {
               Resource: "arn:aws:states:::lambda:invoke",
               Output: "{% $states.result.Payload %}",
               Arguments: {
-                FunctionName: pulumi.interpolate`${lambdaFfmpeg.lambda.arn}:$LATEST`,
+                FunctionName: pulumi.interpolate`${lambdaFfmpegBurn.lambda.arn}:$LATEST`,
                 Payload: {
                   jobId: "{% $jobId %}",
                   action: "vid2frame",
@@ -319,7 +341,7 @@ export default class VideoRender extends pulumi.ComponentResource {
               Resource: "arn:aws:states:::lambda:invoke",
               Output: "{% $states.result.Payload %}",
               Arguments: {
-                FunctionName: pulumi.interpolate`${lambdaFfmpeg.lambda.arn}:$LATEST`,
+                FunctionName: pulumi.interpolate`${lambdaFfmpegBurn.lambda.arn}:$LATEST`,
                 Payload: {
                   jobId: "{% $jobId %}",
                   action: "frame2vid",

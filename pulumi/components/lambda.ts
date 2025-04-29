@@ -2,6 +2,9 @@ import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 // import * as lambdaBuilders from "@pulumi/lambda-builders";
 import { Input } from "@pulumi/pulumi";
+import * as fs from "fs";
+import * as path from "path";
+import * as crypto from "crypto";
 
 export enum Arch {
   x86 = "x86_64",
@@ -23,12 +26,34 @@ export const AssumePolicy = aws.iam.getPolicyDocumentOutput({
   ],
 });
 
+export function HashFolder(folderPath: string): string {
+    const hash = crypto.createHash("sha256");
+
+    function walk(currentPath: string) {
+        const entries = fs.readdirSync(currentPath, { withFileTypes: true });
+        for (const entry of entries) {
+            const fullPath = path.join(currentPath, entry.name);
+            if (entry.isDirectory()) {
+                walk(fullPath);
+            } else if (entry.isFile()) {
+                const content = fs.readFileSync(fullPath);
+                hash.update(content);
+            }
+        }
+    }
+
+    walk(folderPath);
+
+    return hash.digest("base64");
+}
+
 export interface GoLambdaProps {
   tags: aws.Tags;
   source: {
     code?: Input<string>;
     s3Key?: Input<string>;
     s3Bucket?: aws.s3.BucketV2;
+    hash?: Input<string>;
   };
   name?: Input<string>;
   handler?: Input<string>;
@@ -105,11 +130,12 @@ export class GoLambda extends pulumi.ComponentResource {
       name,
       {
         // code: builder.asset,
+        name: lambdaName,
         tags: args.tags,
         code: args.source.code,
         s3Bucket: args.source.s3Bucket?.id,
         s3Key: args.source.s3Key,
-        name: lambdaName,
+        sourceCodeHash: args.source.hash,
         role: this.role.arn,
         reservedConcurrentExecutions: args.reservedConcurrency,
         handler: args.handler ?? "bootstrap",
