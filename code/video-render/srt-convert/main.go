@@ -27,9 +27,9 @@ var (
 )
 
 type Event struct {
-	Bucket            string `json:"bucket"`
+	Bucket    string `json:"bucket"`
 	SourceKey string `json:"sourceKey"`
-	DestKey string `json:"destKey"`
+	DestKey   string `json:"destKey"`
 }
 
 func main() {
@@ -117,7 +117,6 @@ func ffmpegConvert(ctx context.Context, srtFile string, assFile string) error {
 	args := []string{
 		"-loglevel", "error",
 		"-i", srtFile,
-		"-s", "1080x1920", // TODO: read from real video
 		assFile,
 	}
 	log.Debugf("FFMPEG args: %s", strings.Join(args, " "))
@@ -178,6 +177,13 @@ func addStyle(ass string) (string, error) {
 	}
 
 	return strings.Join(output, "\n"), nil
+}
+
+func overwriteResolution(ass string) string {
+	res := ass
+	res = strings.Replace(res, fmt.Sprintf("PlayResX: %d", 384), fmt.Sprintf("PlayResX: %d", 1080), 1)
+	res = strings.Replace(res, fmt.Sprintf("PlayResY: %d", 288), fmt.Sprintf("PlayResY: %d", 1920), 1)
+	return res
 }
 
 func s3Put(ctx context.Context, s3Bucket string, s3Key string, content io.Reader) error {
@@ -253,6 +259,7 @@ func HandleRequest(ctx context.Context, event Event) error {
 	if err != nil {
 		return err
 	}
+	styledAssString = overwriteResolution(styledAssString)
 
 	err = s3Put(ctx, event.Bucket, event.DestKey, strings.NewReader(styledAssString))
 	if err != nil {
