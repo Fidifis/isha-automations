@@ -126,7 +126,6 @@ func ffmpegRender(ctx context.Context, inVideoFile string, audioFolder string, a
 	args := []string{
 		"-loglevel", "error",
 		"-i", inVideoFile,
-		"-vf", "ass=" + assFile,
 	}
 	log.Debugf("Listing audio files in %s", audioFolder)
 	audioFiles, err := os.ReadDir(audioFolder)
@@ -136,7 +135,7 @@ func ffmpegRender(ctx context.Context, inVideoFile string, audioFolder string, a
 	for _, audioFile := range audioFiles {
 		args = append(args, "-i", filepath.Join(audioFolder, audioFile.Name()))
 	}
-	args = append(args, "-map", "0:v")
+	args = append(args, "-vf", "ass="+assFile, "-map", "0:v")
 	for i := range audioFiles {
 		args = append(args, "-map", fmt.Sprintf("%d:a", i+1))
 	}
@@ -218,6 +217,7 @@ func HandleRequest(ctx context.Context, event Event) error {
 	videoFolderKey := fmt.Sprintf("%svideo/", getBucketKey(event.JobId, event.DownloadFolderKey))
 	audioFolderKey := fmt.Sprintf("%saudio/", getBucketKey(event.JobId, event.DownloadFolderKey))
 	resultVideoKey := fmt.Sprintf("%svideo.mp4", getBucketKey(event.JobId, event.ResultFolderKey))
+	downloadFolderKey := getBucketKey(event.JobId, event.DownloadFolderKey)
 
 	videoFile, err := os.CreateTemp("", "video-")
 	if err != nil {
@@ -247,7 +247,7 @@ func HandleRequest(ctx context.Context, event Event) error {
 	}
 	defer os.RemoveAll(audioDir)
 
-	err = getAss(ctx, assFile, event.Bucket, fmt.Sprintf("%ssubtitles.ass", event.DownloadFolderKey))
+	err = getAss(ctx, assFile, event.Bucket, fmt.Sprintf("%ssubtitles.ass", downloadFolderKey))
 	if err != nil {
 		return err
 	}

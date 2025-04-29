@@ -117,6 +117,7 @@ func ffmpegConvert(ctx context.Context, srtFile string, assFile string) error {
 	args := []string{
 		"-loglevel", "error",
 		"-i", srtFile,
+		"-s", "1080x1920", // TODO: read from real video
 		assFile,
 	}
 	log.Debugf("FFMPEG args: %s", strings.Join(args, " "))
