@@ -152,6 +152,9 @@ func ffmpegRender(ctx context.Context, inVideoFile string, audioFolder string, a
 	if err := cmd.Run(); err != nil {
 		return errors.Join(fmt.Errorf("Failed ffmpeg encode to video. Logs:\n%s", cmdErr.String()), err)
 	}
+	if cmdErr.Len() > 0 {
+		log.Warnf("ffmpeg output: %s", cmdErr.String())
+	}
 	return nil
 }
 
