@@ -255,11 +255,12 @@ func HandleRequest(ctx context.Context, event Event) error {
 		return err
 	}
 
-	styledAssString, err := addStyle(string(assBytes))
-	if err != nil {
-		return err
-	}
-	styledAssString = overwriteResolution(styledAssString)
+	// styledAssString, err := addStyle(string(assBytes))
+	// if err != nil {
+	// 	return err
+	// }
+	// styledAssString = overwriteResolution(styledAssString)
+	styledAssString := string(assBytes)
 
 	err = s3Put(ctx, event.Bucket, event.DestKey, strings.NewReader(styledAssString))
 	if err != nil {
