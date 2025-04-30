@@ -29,7 +29,7 @@ type Event struct {
 	Bucket            string `json:"bucket"`
 	DownloadFolderKey string `json:"downloadFolderKey"`
 	ResultFolderKey   string `json:"resultFolderKey"`
-	fontBucket        string `json:"fontBucket"`
+	FontBucket        string `json:"fontBucket"`
 	FontKey           string `json:"fontKey"`
 }
 
@@ -130,7 +130,7 @@ func getAss(ctx context.Context, assFile string, s3Bucket string, s3Key string) 
 	return s3Get(ctx, s3Bucket, s3Key, assFile)
 }
 
-func ffmpegRender(ctx context.Context, inVideoFile string, audioFolder string, assFile string, outVideoFile string) error {
+func ffmpegRender(ctx context.Context, inVideoFile string, audioFolder string, assFile string, fontDir string, outVideoFile string) error {
 	args := []string{
 		"-loglevel", "error",
 		"-i", inVideoFile,
@@ -143,7 +143,7 @@ func ffmpegRender(ctx context.Context, inVideoFile string, audioFolder string, a
 	for _, audioFile := range audioFiles {
 		args = append(args, "-i", filepath.Join(audioFolder, audioFile.Name()))
 	}
-	args = append(args, "-vf", "ass="+assFile, "-map", "0:v")
+	args = append(args, "-vf", fmt.Sprintf("ass=%s:fontsdir=%s", assFile, fontDir), "-map", "0:v")
 	for i := range audioFiles {
 		args = append(args, "-map", fmt.Sprintf("%d:a", i+1))
 	}
@@ -234,6 +234,14 @@ func HandleRequest(ctx context.Context, event Event) error {
 	videoFile := filepath.Join(downloadsDir, "video")
 	defer os.Remove(videoFile)
 
+	fontDir, err := os.MkdirTemp("", "font-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(fontDir)
+	fontFile := filepath.Join(fontDir, "font.ttf")
+	defer os.Remove(fontFile)
+
 	resultsDir, err := os.MkdirTemp("", "result-")
 	if err != nil {
 		return err
@@ -247,6 +255,11 @@ func HandleRequest(ctx context.Context, event Event) error {
 		return err
 	}
 	defer os.RemoveAll(audioDir)
+
+	err = s3Get(ctx, event.FontBucket, event.FontKey, fontFile)
+	if err != nil {
+		return err
+	}
 
 	err = getAss(ctx, assFile, event.Bucket, fmt.Sprintf("%ssubtitles.ass", downloadFolderKey))
 	if err != nil {
@@ -263,7 +276,7 @@ func HandleRequest(ctx context.Context, event Event) error {
 		return err
 	}
 
-	err = ffmpegRender(ctx, videoFile, audioDir, assFile, resultVideo)
+	err = ffmpegRender(ctx, videoFile, audioDir, assFile, fontDir, resultVideo)
 	if err != nil {
 		return err
 	}

@@ -10,17 +10,21 @@ import { MetaProps } from "./utils";
 async function main() {
   const tags = {
     project: pulumi.getProject(),
-    env: pulumi.getStack()
-  }
+    env: pulumi.getStack(),
+  };
   const meta: MetaProps = {
     accountId: (await aws.getCallerIdentity({})).accountId,
     region: (await aws.getRegion()).id,
     tags,
   };
 
-  const { codeBucket, procFilesBucket, gcpConfigParam, rngLambda } = new CommonRes(
-    "CommonRes", tags
-  );
+  const {
+    codeBucket,
+    assetsBucket,
+    procFilesBucket,
+    gcpConfigParam,
+    rngLambda,
+  } = new CommonRes("CommonRes", tags);
 
   const { apiAuthorizer } = new ApiAccess("ApiAuthorizerPSK", {
     codeBucket,
@@ -36,6 +40,7 @@ async function main() {
   const videoRender = new VideoRender("VideoRender", {
     meta,
     codeBucket,
+    assetsBucket,
     procFilesBucket,
     rng: rngLambda.lambda,
     apiAuthorizer,

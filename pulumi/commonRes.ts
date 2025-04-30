@@ -6,6 +6,7 @@ import { Arch, GoLambda } from "./components/lambda";
 
 export default class CommonRes extends pulumi.ComponentResource {
   public readonly codeBucket: aws.s3.BucketV2;
+  public readonly assetsBucket: aws.s3.BucketV2;
   public readonly procFilesBucket: aws.s3.BucketV2;
   public readonly gcpConfigParam: aws.ssm.Parameter;
   public readonly rngLambda: GoLambda;
@@ -18,6 +19,11 @@ export default class CommonRes extends pulumi.ComponentResource {
       tags,
     }, { parent: this });
     utils.addS3BasicRules("LambdaCodeRules", this.codeBucket);
+
+    this.assetsBucket = new aws.s3.BucketV2("Assets", {
+      tags,
+    }, { parent: this });
+    utils.addS3BasicRules("AssetsRules", this.assetsBucket);
 
     this.procFilesBucket = new aws.s3.BucketV2("ProcFiles", {
       tags,
@@ -76,6 +82,7 @@ export default class CommonRes extends pulumi.ComponentResource {
 
     this.registerOutputs({
       codeBucket: this.codeBucket,
+      assetsBucket: this.assetsBucket,
       procFilesBucket: this.procFilesBucket,
       gcpConfigParam: this.gcpConfigParam,
       rngLambda: this.rngLambda,

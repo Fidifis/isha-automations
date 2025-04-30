@@ -8,6 +8,7 @@ export interface VideoRenderProps {
   meta: MetaProps;
   codeBucket: aws.s3.BucketV2;
   procFilesBucket: aws.s3.BucketV2;
+  assetsBucket: aws.s3.BucketV2;
   rng: aws.lambda.Function;
   apiAuthorizer: aws.lambda.Function;
   gcpConfigParam: aws.ssm.Parameter;
@@ -35,13 +36,18 @@ export default class VideoRender extends pulumi.ComponentResource {
               },
               {
                 actions: ["s3:ListBucket"],
-                resources: [args.procFilesBucket.arn],
+                resources: [args.procFilesBucket.arn, args.assetsBucket.arn],
               },
               {
                 actions: ["s3:PutObject", "s3:GetObject"],
                 resources: [
-                  pulumi.interpolate`${args.procFilesBucket.arn}/video-render`,
                   pulumi.interpolate`${args.procFilesBucket.arn}/video-render/*`,
+                ],
+              },
+              {
+                actions: ["s3:GetObject"],
+                resources: [
+                  pulumi.interpolate`${args.assetsBucket.arn}/fonts/*`,
                 ],
               },
             ],
@@ -349,6 +355,8 @@ export default class VideoRender extends pulumi.ComponentResource {
                   bucket: args.procFilesBucket.id,
                   downloadFolderKey: "video-render/download/",
                   resultFolderKey: "video-render/result/",
+                  fontBucket: args.assetsBucket.id,
+                  fontKey: "fonts/merriweather_sans.ttf"
                 },
               },
               Retry: [

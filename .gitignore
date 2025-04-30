@@ -1,5 +1,5 @@
 .direnv
 bin/
 node_modules/
-
+/assets
 /result
