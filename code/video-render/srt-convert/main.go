@@ -30,6 +30,10 @@ type Event struct {
 	Bucket    string `json:"bucket"`
 	SourceKey string `json:"sourceKey"`
 	DestKey   string `json:"destKey"`
+
+	FontName  string `json:"fontName,omitempty"`
+	FontSize  string `json:"fontSize,omitempty"`
+	TextHeight  string `json:"textHeight,omitempty"`
 }
 
 func main() {
@@ -131,7 +135,7 @@ func ffmpegConvert(ctx context.Context, srtFile string, assFile string) error {
 	return nil
 }
 
-func addStyle(ass string) (string, error) {
+func addStyle(ass string, fontName string, fontSize string, height string) (string, error) {
 	lines := strings.Split(ass, "\n")
 	var output []string
 	inStyles := false
@@ -163,9 +167,15 @@ func addStyle(ass string) (string, error) {
 				return "", fmt.Errorf("Style line too short: %s", line)
 			}
 
-			styleFields[1] = "Open Sans"
-			styleFields[2] = "36"
-			styleFields[20] = "80"
+			if fontName != "" {
+				styleFields[1] = fontName
+			}
+			if fontSize != "" {
+				styleFields[2] = fontSize
+			}
+			if height != "" {
+				styleFields[20] = height
+			}
 
 			newStyle := "Style:" + strings.Join(styleFields, ",")
 			output = append(output, newStyle)
@@ -255,12 +265,11 @@ func HandleRequest(ctx context.Context, event Event) error {
 		return err
 	}
 
-	// styledAssString, err := addStyle(string(assBytes))
-	// if err != nil {
-	// 	return err
-	// }
+	styledAssString, err := addStyle(string(assBytes), event.FontName, event.FontSize, event.TextHeight)
+	if err != nil {
+		return err
+	}
 	// styledAssString = overwriteResolution(styledAssString)
-	styledAssString := string(assBytes)
 
 	err = s3Put(ctx, event.Bucket, event.DestKey, strings.NewReader(styledAssString))
 	if err != nil {
