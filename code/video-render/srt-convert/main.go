@@ -65,7 +65,7 @@ func s3Get(ctx context.Context, s3Bucket string, s3Key string, file string) erro
 	log.Debugf("getObject s3=%s key=%s", s3Bucket, s3Key)
 	fileHandle, err := os.Create(file)
 	if err != nil {
-		return errors.Join(fmt.Errorf("Error create a file for the download file=%s s3=%s key=%s", file, s3Bucket, s3Key), err)
+		return errors.Join(fmt.Errorf("Error create a file for the download s3=%s key=%s file=%s", s3Bucket, s3Key, file), err)
 	}
 	defer fileHandle.Close()
 
@@ -74,13 +74,13 @@ func s3Get(ctx context.Context, s3Bucket string, s3Key string, file string) erro
 		Key:    aws.String(s3Key),
 	})
 	if err != nil {
-		return errors.Join(fmt.Errorf("Error Downloading video from s3=%s key=%s", s3Bucket, s3Key), err)
+		return errors.Join(fmt.Errorf("Error downloading file from s3=%s key=%s", s3Bucket, s3Key), err)
 	}
 	defer s3File.Body.Close()
 
 	_, err = io.Copy(fileHandle, s3File.Body)
 	if err != nil {
-		return errors.Join(fmt.Errorf("Error writing downloaded file from s3=%s key=%s", s3Bucket, s3Key), err)
+		return errors.Join(fmt.Errorf("Error writing downloaded file from s3=%s key=%s file=%s", s3Bucket, s3Key, file), err)
 	}
 	return nil
 }

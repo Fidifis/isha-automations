@@ -29,6 +29,8 @@ type Event struct {
 	Bucket            string `json:"bucket"`
 	DownloadFolderKey string `json:"downloadFolderKey"`
 	ResultFolderKey   string `json:"resultFolderKey"`
+	fontBucket        string `json:"fontBucket"`
+	FontKey           string `json:"fontKey"`
 }
 
 func main() {
@@ -70,25 +72,31 @@ func testFFmpeg(ctx context.Context) error {
 	return nil
 }
 
-func s3Get(ctx context.Context, s3Bucket string, s3Key string, file io.Writer) error {
+func s3Get(ctx context.Context, s3Bucket string, s3Key string, file string) error {
 	log.Debugf("getObject s3=%s key=%s", s3Bucket, s3Key)
+	fileHandle, err := os.Create(file)
+	if err != nil {
+		return errors.Join(fmt.Errorf("Error create a file for the download s3=%s key=%s file=%s", s3Bucket, s3Key, file), err)
+	}
+	defer fileHandle.Close()
+
 	s3File, err := s3c.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(s3Bucket),
 		Key:    aws.String(s3Key),
 	})
 	if err != nil {
-		return errors.Join(fmt.Errorf("Error Downloading video from s3=%s key=%s", s3Bucket, s3Key), err)
+		return errors.Join(fmt.Errorf("Error downloading file from s3=%s key=%s", s3Bucket, s3Key), err)
 	}
 	defer s3File.Body.Close()
 
-	_, err = io.Copy(file, s3File.Body)
+	_, err = io.Copy(fileHandle, s3File.Body)
 	if err != nil {
-		return errors.Join(fmt.Errorf("Error writing downloaded file from s3=%s key=%s", s3Bucket, s3Key), err)
+		return errors.Join(fmt.Errorf("Error writing downloaded file from s3=%s key=%s file=%s", s3Bucket, s3Key, file), err)
 	}
 	return nil
 }
 
-func copyVideoIn(ctx context.Context, videoFile *os.File, s3Bucket string, s3Key string) error {
+func copyVideoIn(ctx context.Context, videoFile string, s3Bucket string, s3Key string) error {
 	log.Debugf("Downloading video from s3=%s key=%s", s3Bucket, s3Key)
 	paginator := s3.NewListObjectsV2Paginator(s3c, &s3.ListObjectsV2Input{
 		Bucket: &s3Bucket,
@@ -117,7 +125,7 @@ func copyVideoOut(ctx context.Context, videoFileName string, s3Bucket string, s3
 	return s3Put(ctx, s3Bucket, s3Key, videoFile)
 }
 
-func getAss(ctx context.Context, assFile *os.File, s3Bucket string, s3Key string) error {
+func getAss(ctx context.Context, assFile string, s3Bucket string, s3Key string) error {
 	log.Debugf("Pulling subtitles from s3=%s key=%s", s3Bucket, s3Key)
 	return s3Get(ctx, s3Bucket, s3Key, assFile)
 }
@@ -189,15 +197,8 @@ func s3CopyInMany(ctx context.Context, systemFolder string, s3Bucket string, s3K
 			nameOnly := objKeySplit[len(objKeySplit)-1]
 			fName := filepath.Join(systemFolder, nameOnly)
 
-			file, err := os.Create(fName)
-			if err != nil {
-				log.Warn("Error hint: if object key seems to be empty or '/' it may be caused by hiden file representing the folder itself, that is created during 'create folder' from UI.\nuse `aws s3 ls s3://` to debug")
-				return errors.Join(fmt.Errorf("Error creating file %s ; objectKey=%s", fName, *object.Key), err)
-			}
-			defer file.Close()
-
 			// frameFile.Seek(0, io.SeekStart)
-			err = s3Get(ctx, s3Bucket, *object.Key, file)
+			err = s3Get(ctx, s3Bucket, *object.Key, fName)
 			if err != nil {
 				return err
 			}
@@ -222,19 +223,16 @@ func HandleRequest(ctx context.Context, event Event) error {
 	resultVideoKey := fmt.Sprintf("%svideo.mp4", getBucketKey(event.JobId, event.ResultFolderKey))
 	downloadFolderKey := getBucketKey(event.JobId, event.DownloadFolderKey)
 
-	videoFile, err := os.CreateTemp("", "video-")
+	downloadsDir, err := os.MkdirTemp("", "downloads-")
 	if err != nil {
 		return err
 	}
-	defer os.Remove(videoFile.Name())
-	defer videoFile.Close()
+	defer os.RemoveAll(downloadsDir)
 
-	assFile, err := os.CreateTemp("", "ass-")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(assFile.Name())
-	defer assFile.Close()
+	assFile := filepath.Join(downloadsDir, "subtitles.ass")
+	defer os.Remove(assFile)
+	videoFile := filepath.Join(downloadsDir, "video")
+	defer os.Remove(videoFile)
 
 	resultsDir, err := os.MkdirTemp("", "result-")
 	if err != nil {
@@ -254,20 +252,18 @@ func HandleRequest(ctx context.Context, event Event) error {
 	if err != nil {
 		return err
 	}
-	assFile.Close() // close so ffmpeg can open
 
 	err = copyVideoIn(ctx, videoFile, event.Bucket, videoFolderKey)
 	if err != nil {
 		return err
 	}
-	videoFile.Close() // close so ffmpeg can open
 
 	err = s3CopyInMany(ctx, audioDir, event.Bucket, audioFolderKey)
 	if err != nil {
 		return err
 	}
 
-	err = ffmpegRender(ctx, videoFile.Name(), audioDir, assFile.Name(), resultVideo)
+	err = ffmpegRender(ctx, videoFile, audioDir, assFile, resultVideo)
 	if err != nil {
 		return err
 	}
