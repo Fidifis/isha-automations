@@ -190,9 +190,59 @@ export default class VideoRender extends pulumi.ComponentResource {
           lambdaCopyIn.role,
           lambdaConvertSrt.role,
           lambdaFfmpegBurn.role,
-          lambdaDeliverGSheet.role
+          lambdaDeliverGSheet.role,
         ],
         policyArn: lambdaPolicy.arn,
+      },
+      { parent: this },
+    );
+    const apiGwExec = new aws.iam.Role(
+      `${name}-ApiGwExec`,
+      {
+        tags: args.meta.tags,
+        assumeRolePolicy: aws.iam.getPolicyDocumentOutput(
+          {
+            statements: [
+              {
+                effect: "Allow",
+                principals: [
+                  {
+                    type: "Service",
+                    identifiers: ["apigateway.amazonaws.com"],
+                  },
+                ],
+                actions: ["sts:AssumeRole"],
+                conditions: [
+                  {
+                    test: "StringEquals",
+                    variable: "aws:SourceAccount",
+                    values: [args.meta.accountId],
+                  },
+                ],
+              },
+            ],
+          },
+          { parent: this },
+        ).json,
+        inlinePolicies: [
+          {
+            policy: aws.iam.getPolicyDocumentOutput(
+              {
+                statements: [
+                  {
+                    actions: [
+                      "states:StartExecution",
+                      "states:StopExecution",
+                      "states:StartSyncExecution",
+                    ],
+                    resources: [args.gcpConfigParam.arn],
+                  },
+                ],
+              },
+              { parent: this },
+            ).json,
+          },
+        ],
       },
       { parent: this },
     );
@@ -246,7 +296,7 @@ export default class VideoRender extends pulumi.ComponentResource {
       { parent: this },
     );
 
-    new aws.sfn.StateMachine(
+    const stateMachine = new aws.sfn.StateMachine(
       `${name}`,
       {
         tags: args.meta.tags,
@@ -449,10 +499,11 @@ export default class VideoRender extends pulumi.ComponentResource {
 
     this.routes = [
       {
-        path: "/v1/process/reel",
+        path: "/unstable/v1/process/reel",
         method: "POST",
-        eventHandler: lambdaCopyIn.lambda,
+        eventHandler: stateMachine,
         authorizer: args.apiAuthorizer,
+        execRole: apiGwExec,
       },
     ];
 

@@ -3,11 +3,12 @@ import * as aws from "@pulumi/aws";
 import { Input } from "@pulumi/pulumi";
 
 export interface ApiGatewayRoute {
-    path: Input<string>;
-    method?: Input<string>;
-    eventHandler: aws.lambda.Function;
-    authorizer?: aws.lambda.Function;
-    payloadFormatVersion?: Input<string>;
+  path: Input<string>;
+  method?: Input<string>;
+  eventHandler: aws.lambda.Function | aws.sfn.StateMachine;
+  execRole?: aws.iam.Role;
+  authorizer?: aws.lambda.Function;
+  payloadFormatVersion?: Input<string>;
 }
 
 export interface ApiGatewayV2Props {
@@ -77,32 +78,48 @@ export default class ApiGatewayV2 extends pulumi.ComponentResource {
     );
 
     args.routes.forEach((route, index) => {
+      const integrationAdditional =
+        route.eventHandler instanceof aws.sfn.StateMachine
+          ? {
+              integrationSubtype: "StepFunctions-StartExecution",
+              requestParameters: {
+                Input: "$request.body",
+                StateMachineArn: route.eventHandler.arn,
+              },
+              payloadFormatVersion: route.payloadFormatVersion ?? "1.0",
+            }
+          : {
+              integrationUri: route.eventHandler.invokeArn,
+              payloadFormatVersion: route.payloadFormatVersion ?? "2.0",
+              integrationMethod: "POST",
+            };
       const integration = new aws.apigatewayv2.Integration(
         `${name}-integration-${index}`,
         {
           apiId: this.apiGateway.id,
           integrationType: "AWS_PROXY",
-          integrationMethod: route.method ?? "GET",
-          integrationUri: route.eventHandler.invokeArn,
-          payloadFormatVersion: route.payloadFormatVersion ?? "2.0",
+          credentialsArn: route.execRole?.arn,
+          ...integrationAdditional,
         },
         { parent: this },
       );
       this.integrations.push(integration);
 
-      const authorizer = route.authorizer ? new aws.apigatewayv2.Authorizer(
-        `${name}-authorizer-${index}`,
-        {
-          apiId: this.apiGateway.id,
-          authorizerType: "REQUEST",
-          authorizerUri: route.authorizer.invokeArn,
-          authorizerPayloadFormatVersion: "2.0",
-          enableSimpleResponses: true,
-        },
-        { parent: this },
-      ) : null;
+      const authorizer = route.authorizer
+        ? new aws.apigatewayv2.Authorizer(
+            `${name}-authorizer-${index}`,
+            {
+              apiId: this.apiGateway.id,
+              authorizerType: "REQUEST",
+              authorizerUri: route.authorizer.invokeArn,
+              authorizerPayloadFormatVersion: "2.0",
+              enableSimpleResponses: true,
+            },
+            { parent: this },
+          )
+        : null;
       if (authorizer) {
-          this.authorizers.push(authorizer);
+        this.authorizers.push(authorizer);
       }
 
       const apiRoute = new aws.apigatewayv2.Route(
@@ -112,7 +129,7 @@ export default class ApiGatewayV2 extends pulumi.ComponentResource {
           routeKey:
             route.path === "$default"
               ? route.path
-              : `${route.method ?? "GET"} ${route.path}`,
+              : `${route.method ?? "POST"} ${route.path}`,
           target: pulumi.interpolate`integrations/${integration.id}`,
           authorizationType: route.authorizer ? "CUSTOM" : "NONE",
           authorizerId: authorizer?.id,
@@ -121,28 +138,32 @@ export default class ApiGatewayV2 extends pulumi.ComponentResource {
       );
       this.routes.push(apiRoute);
 
-      const permission = new aws.lambda.Permission(
-        `${name}-permission-${index}`,
-        {
-          action: "lambda:InvokeFunction",
-          function: route.eventHandler.name,
-          principal: "apigateway.amazonaws.com",
-          sourceArn: pulumi.interpolate`${this.apiGateway.executionArn}/*`,
-        },
-        { parent: this },
-      );
-      this.permissions.push(permission);
+      if (route.eventHandler instanceof aws.lambda.Function) {
+        const permission = new aws.lambda.Permission(
+          `${name}-permission-${index}`,
+          {
+            action: "lambda:InvokeFunction",
+            function: route.eventHandler.name,
+            principal: "apigateway.amazonaws.com",
+            sourceArn: pulumi.interpolate`${this.apiGateway.executionArn}/*`,
+          },
+          { parent: this },
+        );
+        this.permissions.push(permission);
+      }
 
-      const authorizerPermission = route.authorizer ?new aws.lambda.Permission(
-        `${name}-authPermission-${index}`,
-        {
-          action: "lambda:InvokeFunction",
-          function: route.authorizer.name,
-          principal: "apigateway.amazonaws.com",
-          sourceArn: pulumi.interpolate`${this.apiGateway.executionArn}/*`,
-        },
-        { parent: this },
-      ):null;
+      const authorizerPermission = route.authorizer
+        ? new aws.lambda.Permission(
+            `${name}-authPermission-${index}`,
+            {
+              action: "lambda:InvokeFunction",
+              function: route.authorizer.name,
+              principal: "apigateway.amazonaws.com",
+              sourceArn: pulumi.interpolate`${this.apiGateway.executionArn}/*`,
+            },
+            { parent: this },
+          )
+        : null;
       if (authorizerPermission) {
         this.permissions.push(authorizerPermission);
       }
