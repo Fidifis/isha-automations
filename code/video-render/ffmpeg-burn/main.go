@@ -135,19 +135,26 @@ func ffmpegRender(ctx context.Context, inVideoFile string, audioFolder string, a
 		"-loglevel", "error",
 		"-i", inVideoFile,
 	}
+	var amixString strings.Builder
+	amixTotal := 0
+
 	log.Debugf("Listing audio files in %s", audioFolder)
 	audioFiles, err := os.ReadDir(audioFolder)
 	if err != nil {
 		return errors.Join(fmt.Errorf("Failed to list folder %s", audioFolder), err)
 	}
-	for _, audioFile := range audioFiles {
+	for i, audioFile := range audioFiles {
 		args = append(args, "-i", filepath.Join(audioFolder, audioFile.Name()))
+		amixString.WriteString(fmt.Sprintf("[%d:a]", i + 1))
+		amixTotal++
 	}
-	args = append(args, "-vf", fmt.Sprintf("ass=%s:fontsdir=%s", assFile, fontDir), "-map", "0:v")
-	for i := range audioFiles {
-		args = append(args, "-map", fmt.Sprintf("%d:a", i+1))
-	}
-	args = append(args, "-c:v", "libx264", "-c:a", "aac", outVideoFile)
+	amixString.WriteString(fmt.Sprintf("amix=inputs=%d:duration=longest[aout]", amixTotal))
+	args = append(args,
+		"-filter_complex", amixString.String(),
+		"-vf", fmt.Sprintf("ass=%s:fontsdir=%s", assFile, fontDir),
+		"-map", "0:v", "-map", "[aout]",
+		"-c:v", "libx264", "-c:a", "aac",
+		outVideoFile)
 
 	log.Debugf("FFMPEG args: %s", strings.Join(args, " "))
 
