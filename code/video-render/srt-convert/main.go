@@ -34,6 +34,7 @@ type Event struct {
 	FontName  string `json:"fontName,omitempty"`
 	FontSize  string `json:"fontSize,omitempty"`
 	TextHeight  string `json:"textHeight,omitempty"`
+	Vertical bool `json:"vertical,omitempty"`
 }
 
 func main() {
@@ -174,7 +175,7 @@ func addStyle(ass string, fontName string, fontSize string, height string) (stri
 				styleFields[2] = fontSize
 			}
 			if height != "" {
-				styleFields[20] = height
+				styleFields[21] = height
 			}
 
 			newStyle := "Style:" + strings.Join(styleFields, ",")
@@ -189,10 +190,10 @@ func addStyle(ass string, fontName string, fontSize string, height string) (stri
 	return strings.Join(output, "\n"), nil
 }
 
-func overwriteResolution(ass string) string {
+func swapResolution(ass string) string {
 	res := ass
-	res = strings.Replace(res, fmt.Sprintf("PlayResX: %d", 384), fmt.Sprintf("PlayResX: %d", 1080), 1)
-	res = strings.Replace(res, fmt.Sprintf("PlayResY: %d", 288), fmt.Sprintf("PlayResY: %d", 1920), 1)
+	res = strings.Replace(res, fmt.Sprintf("PlayResX: %d", 384), fmt.Sprintf("PlayResX: %d", 288), 1)
+	res = strings.Replace(res, fmt.Sprintf("PlayResY: %d", 288), fmt.Sprintf("PlayResY: %d", 384), 1)
 	return res
 }
 
@@ -209,17 +210,7 @@ func s3Put(ctx context.Context, s3Bucket string, s3Key string, content io.Reader
 	return nil
 }
 
-func fixSrtFile(srtFile string) error {
-	file, err := os.ReadFile(srtFile)
-	if err != nil {
-		return errors.Join(fmt.Errorf("Failed to open srt file (fix formatting func) file=%s", srtFile), err)
-	}
-	srt := string(file)
-	fixed := fixSrtFormatting(srt)
-	err = os.WriteFile(srtFile, []byte(fixed), 0644)
-	if err != nil {
-		return errors.Join(fmt.Errorf("Failed to save srt file (fix formatting func) file=%s", srtFile), err)
-	}
+func srtPreProcess(srtFile string) error {
 	return nil
 }
 
@@ -250,9 +241,20 @@ func HandleRequest(ctx context.Context, event Event) error {
 		return err
 	}
 
-	err = fixSrtFile(srtFile)
+	srtBytes, err := os.ReadFile(srtFile)
 	if err != nil {
-		return err
+		return errors.Join(fmt.Errorf("Failed to open srt file (pre-process) file=%s", srtFile), err)
+	}
+	srt := string(srtBytes)
+
+	srt = fixSrtFormatting(srt)
+	if event.Vertical {
+		srt = strings.ToUpper(srt)
+	}
+
+	err = os.WriteFile(srtFile, []byte(srt), 0644)
+	if err != nil {
+		return errors.Join(fmt.Errorf("Failed to save srt file (pre-process) file=%s", srtFile), err)
 	}
 
 	err = ffmpegConvert(ctx, srtFile, assFile)
@@ -269,7 +271,9 @@ func HandleRequest(ctx context.Context, event Event) error {
 	if err != nil {
 		return err
 	}
-	// styledAssString = overwriteResolution(styledAssString)
+	if event.Vertical {
+	  styledAssString = swapResolution(styledAssString)
+	}
 
 	err = s3Put(ctx, event.Bucket, event.DestKey, strings.NewReader(styledAssString))
 	if err != nil {

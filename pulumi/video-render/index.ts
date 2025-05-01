@@ -326,7 +326,10 @@ export default class VideoRender extends pulumi.ComponentResource {
                             "{% 'video-render/download/' & $jobId & '/subtitles.srt' %}",
                           destKey:
                             "{% 'video-render/download/' & $jobId & '/subtitles.ass' %}",
-                          fontName: "Merriweather Sans"
+                          fontName: "Merriweather Sans",
+                          fontSize: "26",
+                          textHeight: "100",
+                          vertical: true,
                         },
                       },
                       Retry: [
