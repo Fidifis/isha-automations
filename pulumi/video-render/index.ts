@@ -108,6 +108,29 @@ export default class VideoRender extends pulumi.ComponentResource {
       },
       { parent: this },
     );
+    const lambdaDeliverGSheet = new GoLambda(
+      `${name}-DeliverGSheet`,
+      {
+        tags: args.meta.tags,
+        source: {
+          s3Bucket: args.codeBucket,
+          s3Key: "video-render-deliver-gsheet.zip",
+          hash: HashFolder("../code/video-render/deliver-gsheet/"),
+        },
+        architecture: Arch.arm,
+        reservedConcurrency: 20,
+        timeout: 300,
+        memory: 256,
+        logs: { retention: 30 },
+        ephemeralStorage: 4096,
+        env: {
+          variables: {
+            SSM_GCP_CONFIG: args.gcpConfigParam.name,
+          },
+        },
+      },
+      { parent: this },
+    );
 
     const ffmpegLayer = new aws.lambda.LayerVersion(
       `${name}-FfmpegLayer`,
@@ -247,6 +270,8 @@ export default class VideoRender extends pulumi.ComponentResource {
               Next: "Parallel",
               Assign: {
                 jobId: "{% $states.result.Payload.result %}",
+                deliveryWorkflow: "{% $states.input.deliveryWorkflow %}",
+                delivieryParams: "{% $states.input.deliveryParams %}",
               },
               Arguments: {
                 FunctionName: pulumi.interpolate`${args.rng.arn}:$LATEST`,
@@ -327,7 +352,7 @@ export default class VideoRender extends pulumi.ComponentResource {
                           destKey:
                             "{% 'video-render/download/' & $jobId & '/subtitles.ass' %}",
                           fontName: "Merriweather Sans",
-                          fontSize: "26",
+                          fontSize: "22",
                           textHeight: "100",
                           vertical: true,
                         },
@@ -360,7 +385,42 @@ export default class VideoRender extends pulumi.ComponentResource {
                   downloadFolderKey: "video-render/download/",
                   resultFolderKey: "video-render/result/",
                   fontBucket: args.assetsBucket.id,
-                  fontKey: "fonts/merriweather_sans.ttf"
+                  fontKey: "fonts/merriweather_sans.ttf",
+                },
+              },
+              Retry: [
+                {
+                  ErrorEquals: ["Lambda.TooManyRequestsException"],
+                  IntervalSeconds: 1,
+                  MaxAttempts: 3,
+                  BackoffRate: 2,
+                  JitterStrategy: "FULL",
+                },
+              ],
+              Next: "DeliverChoice",
+            },
+            Choice: {
+              Type: "DeliverChoice",
+              Choices: [
+                {
+                  Next: "Deliver",
+                  Condition:
+                    '{% ($deliveryWorkflow) = ("googleSpreadsheet") %}',
+                },
+              ],
+              Default: "Fail",
+            },
+            Deliver: {
+              Type: "Task",
+              Resource: "arn:aws:states:::lambda:invoke",
+              Output: "{% $states.result.Payload %}",
+              Arguments: {
+                FunctionName: pulumi.interpolate`${lambdaDeliverGSheet.lambda.arn}:$LATEST`,
+                Payload: {
+                  deliveryParams: "{% $delivieryParams %}",
+                  bucket: args.procFilesBucket.id,
+                  videoKey:
+                    "{% 'video-render/result/' & $jobId & '/video.mp4' %}",
                 },
               },
               Retry: [
@@ -373,6 +433,11 @@ export default class VideoRender extends pulumi.ComponentResource {
                 },
               ],
               End: true,
+            },
+            Fail: {
+              Type: "Fail",
+              Error: "Cannot deliver",
+              Cause: "invalid input parameter deliveryWorkflow",
             },
           },
           QueryLanguage: "JSONata",

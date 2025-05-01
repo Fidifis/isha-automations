@@ -31,10 +31,10 @@ type Event struct {
 	SourceKey string `json:"sourceKey"`
 	DestKey   string `json:"destKey"`
 
-	FontName  string `json:"fontName,omitempty"`
-	FontSize  string `json:"fontSize,omitempty"`
-	TextHeight  string `json:"textHeight,omitempty"`
-	Vertical bool `json:"vertical,omitempty"`
+	FontName   string `json:"fontName,omitempty"`
+	FontSize   string `json:"fontSize,omitempty"`
+	TextHeight string `json:"textHeight,omitempty"`
+	Vertical   bool   `json:"vertical,omitempty"`
 }
 
 func main() {
@@ -136,7 +136,7 @@ func ffmpegConvert(ctx context.Context, srtFile string, assFile string) error {
 	return nil
 }
 
-func addStyle(ass string, fontName string, fontSize string, height string) (string, error) {
+func addStyle(ass string, fontName string, fontSize string, height string, bold bool) (string, error) {
 	lines := strings.Split(ass, "\n")
 	var output []string
 	inStyles := false
@@ -176,6 +176,9 @@ func addStyle(ass string, fontName string, fontSize string, height string) (stri
 			}
 			if height != "" {
 				styleFields[21] = height
+			}
+			if bold {
+				styleFields[7] = "1"
 			}
 
 			newStyle := "Style:" + strings.Join(styleFields, ",")
@@ -267,12 +270,12 @@ func HandleRequest(ctx context.Context, event Event) error {
 		return err
 	}
 
-	styledAssString, err := addStyle(string(assBytes), event.FontName, event.FontSize, event.TextHeight)
+	styledAssString, err := addStyle(string(assBytes), event.FontName, event.FontSize, event.TextHeight, event.Vertical)
 	if err != nil {
 		return err
 	}
 	if event.Vertical {
-	  styledAssString = swapResolution(styledAssString)
+		styledAssString = swapResolution(styledAssString)
 	}
 
 	err = s3Put(ctx, event.Bucket, event.DestKey, strings.NewReader(styledAssString))
