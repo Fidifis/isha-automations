@@ -16,6 +16,7 @@ import (
 
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/drive/v3"
+	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
 	"google.golang.org/api/sheets/v4"
 )
@@ -166,11 +167,15 @@ func CopyToDrive(ctx context.Context, s3Bucket string, s3Key string, folderId st
 	}
 	defer s3File.Body.Close()
 
-	_, err = driveSvc.Files.Create(&drive.File{
+	_, err = driveSvc.Files.
+		Create(&drive.File{
 		Name:    deliverName,
 		Parents:  []string{folderId},
 		MimeType: "application/vnd.google-apps.video",
-	}).Media(s3File.Body).Do()
+	}).
+		Media(s3File.Body).
+		SupportsAllDrives(true).
+		Do()
 	if err != nil {
 		return errors.Join(fmt.Errorf("Error uploading file to folder=%s file=%s", folderId, deliverName), err)
 	}
