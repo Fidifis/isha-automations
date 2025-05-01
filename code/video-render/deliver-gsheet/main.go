@@ -44,9 +44,9 @@ type SheetSetCellVals struct {
 	Value     string `json:"value"`
 }
 type DeliveryParams struct {
-	VideoFolder  string             `json:"videoFolderId"`
-	SheetId      string             `json:"sheetId"`
-	SetValues    []SheetSetCellVals `json:"setValues"`
+	VideoFolder string             `json:"videoFolderId"`
+	SheetId     string             `json:"sheetId"`
+	SetValues   []SheetSetCellVals `json:"setValues"`
 }
 
 func main() {
@@ -168,10 +168,10 @@ func CopyToDrive(ctx context.Context, s3Bucket string, s3Key string, folderId st
 
 	_, err = driveSvc.Files.
 		Create(&drive.File{
-		Name:    deliverName,
-		Parents:  []string{folderId},
-		MimeType: "application/vnd.google-apps.video",
-	}).
+			Name:     deliverName,
+			Parents:  []string{folderId},
+			MimeType: "video/mp4",
+		}).
 		Media(s3File.Body).
 		SupportsAllDrives(true).
 		Do()
