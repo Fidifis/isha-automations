@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 
 	"go.uber.org/zap"
 
@@ -180,9 +179,9 @@ func CopyToDrive(ctx context.Context, s3Bucket string, s3Key string, folderId st
 
 func HandleRequest(ctx context.Context, event Event) error {
 	var params DeliveryParams
-	err := json.Unmarshal([]byte(event.DeliveryParams), &event.DeliveryParams)
+	err := json.Unmarshal([]byte(event.DeliveryParams), &params)
 	if err != nil {
-		return errors.New("Failed to Unmarshal deliveryParams")
+		return errors.Join(errors.New("Failed to Unmarshal deliveryParams"), err)
 	}
 
 	err = CopyToDrive(ctx, event.Bucket, event.VideoKey, params.VideoFolder)

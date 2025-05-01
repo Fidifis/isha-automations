@@ -190,6 +190,7 @@ export default class VideoRender extends pulumi.ComponentResource {
           lambdaCopyIn.role,
           lambdaConvertSrt.role,
           lambdaFfmpegBurn.role,
+          lambdaDeliverGSheet.role
         ],
         policyArn: lambdaPolicy.arn,
       },
@@ -399,8 +400,8 @@ export default class VideoRender extends pulumi.ComponentResource {
               ],
               Next: "DeliverChoice",
             },
-            Choice: {
-              Type: "DeliverChoice",
+            DeliverChoice: {
+              Type: "Choice",
               Choices: [
                 {
                   Next: "Deliver",
