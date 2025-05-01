@@ -196,56 +196,6 @@ export default class VideoRender extends pulumi.ComponentResource {
       },
       { parent: this },
     );
-    const apiGwExec = new aws.iam.Role(
-      `${name}-ApiGwExec`,
-      {
-        tags: args.meta.tags,
-        assumeRolePolicy: aws.iam.getPolicyDocumentOutput(
-          {
-            statements: [
-              {
-                effect: "Allow",
-                principals: [
-                  {
-                    type: "Service",
-                    identifiers: ["apigateway.amazonaws.com"],
-                  },
-                ],
-                actions: ["sts:AssumeRole"],
-                conditions: [
-                  {
-                    test: "StringEquals",
-                    variable: "aws:SourceAccount",
-                    values: [args.meta.accountId],
-                  },
-                ],
-              },
-            ],
-          },
-          { parent: this },
-        ).json,
-        inlinePolicies: [
-          {
-            policy: aws.iam.getPolicyDocumentOutput(
-              {
-                statements: [
-                  {
-                    actions: [
-                      "states:StartExecution",
-                      "states:StopExecution",
-                      "states:StartSyncExecution",
-                    ],
-                    resources: [args.gcpConfigParam.arn],
-                  },
-                ],
-              },
-              { parent: this },
-            ).json,
-          },
-        ],
-      },
-      { parent: this },
-    );
 
     const stateRole = new aws.iam.Role(
       `${name}-SFSM`,
@@ -493,6 +443,50 @@ export default class VideoRender extends pulumi.ComponentResource {
           },
           QueryLanguage: "JSONata",
         }),
+      },
+      { parent: this },
+    );
+
+    const apiGwExec = new aws.iam.Role(
+      `${name}-ApiGwExec`,
+      {
+        tags: args.meta.tags,
+        assumeRolePolicy: aws.iam.getPolicyDocumentOutput(
+          {
+            statements: [
+              {
+                effect: "Allow",
+                principals: [
+                  {
+                    type: "Service",
+                    identifiers: ["apigateway.amazonaws.com"],
+                  },
+                ],
+                actions: ["sts:AssumeRole"],
+              },
+            ],
+          },
+          { parent: this },
+        ).json,
+        inlinePolicies: [
+          {
+            policy: aws.iam.getPolicyDocumentOutput(
+              {
+                statements: [
+                  {
+                    actions: [
+                      "states:StartExecution",
+                      "states:StopExecution",
+                      "states:StartSyncExecution",
+                    ],
+                    resources: [stateMachine.arn],
+                  },
+                ],
+              },
+              { parent: this },
+            ).json,
+          },
+        ],
       },
       { parent: this },
     );
