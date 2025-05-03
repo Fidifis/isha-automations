@@ -252,6 +252,7 @@ func HandleRequest(ctx context.Context, event Event) (error) {
 	// 	log.Fatal("Unable to read Lambda Context")
 	// }
 
+	log.Infof("jobid=%s", event.JobId)
 	targetBucket, targetKey := getBucket(event.JobId)
 
 	stems, err := FindStems(ctx, event.SourceFolderId, event.DriveId)

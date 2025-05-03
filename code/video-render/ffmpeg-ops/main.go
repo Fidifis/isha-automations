@@ -286,6 +286,7 @@ func s3CopyInMany(ctx context.Context, systemFolder string, s3Bucket string, s3K
 }
 
 func HandleRequest(ctx context.Context, event Event) error {
+	log.Infof("jobid=%s", event.JobId)
 	err := testFFmpeg(ctx)
 	if err != nil {
 		return err

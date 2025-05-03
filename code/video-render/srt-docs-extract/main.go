@@ -198,6 +198,7 @@ func GetRelevantContent(ctx context.Context, doc *docs.Document) (string, bool) 
 }
 
 func HandleRequest(ctx context.Context, event Event) (error) {
+	log.Infof("jobid=%s", event.JobId)
 	targetBucket, targetKey := getBucket(event.JobId)
 
 	transFile, err := findTranslation(ctx, event.SourceFolderId, event.DriveId)

@@ -36,10 +36,10 @@ func S3ToDrive(ctx context.Context, s3c *s3.Client, driveSvc *drive.Service, s3B
 	return nil
 }
 
-func DriveToS3(ctx context.Context, s3c *s3.Client, driveSvc *drive.Service, file *drive.File, s3Bucket string, s3Key string) error {
-	resp, err := driveSvc.Files.Get(file.Id).Download()
+func DriveToS3(ctx context.Context, s3c *s3.Client, driveSvc *drive.Service, fileId string, s3Bucket string, s3Key string) error {
+	resp, err := driveSvc.Files.Get(fileId).Download()
 	if err != nil {
-		return errors.Join(errors.New(fmt.Sprintf("Unable to download file: %s: %s", file.Id, file.Name)), err)
+		return errors.Join(fmt.Errorf("Unable to download file: %s", fileId), err)
 	}
 	defer resp.Body.Close()
 
@@ -52,7 +52,7 @@ func DriveToS3(ctx context.Context, s3c *s3.Client, driveSvc *drive.Service, fil
 
 	_, err = io.Copy(tmpFile, resp.Body)
 	if err != nil {
-		return errors.Join(errors.New(fmt.Sprint("Error copying Google Drive content to temporary file: ", tmpFile.Name())), err)
+		return errors.Join(fmt.Errorf("Error copying Google Drive content to temporary file: ", tmpFile.Name()), err)
 	}
 
 	// Rewind to start of FS stream
@@ -67,7 +67,7 @@ func DriveToS3(ctx context.Context, s3c *s3.Client, driveSvc *drive.Service, fil
 			Body:   tmpFile,
 		})
 	if err != nil {
-		return errors.Join(errors.New(fmt.Sprintf("Error S3 upload: bucket=%s key=%s file=%s", s3Bucket, s3Key, file.Name)), err)
+		return errors.Join(fmt.Errorf("Error S3 upload: bucket=%s key=%s file=%s", s3Bucket, s3Key, fileId), err)
 	}
 
 	return nil
