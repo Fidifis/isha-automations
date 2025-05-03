@@ -1,0 +1,74 @@
+package fileTransfer
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"io"
+
+	"google.golang.org/api/drive/v3"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+)
+
+func S3ToDrive(ctx context.Context, s3c *s3.Client, driveSvc *drive.Service, s3Bucket string, s3Key string, folderId string, fileName string) error {
+	s3File, err := s3c.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: &s3Bucket,
+		Key:    &s3Key,
+	})
+	if err != nil {
+		return errors.Join(fmt.Errorf("Error downloading file from s3=%s key=%s", s3Bucket, s3Key), err)
+	}
+	defer s3File.Body.Close()
+
+	_, err = driveSvc.Files.
+		Create(&drive.File{
+			Name:     fileName,
+			Parents:  []string{folderId},
+			MimeType: "video/mp4",
+		}).
+		Media(s3File.Body).
+		SupportsAllDrives(true).
+		Do()
+	if err != nil {
+		return errors.Join(fmt.Errorf("Error uploading file to folder=%s file=%s", folderId, fileName), err)
+	}
+	return nil
+}
+
+func DriveToS3(ctx context.Context, s3c *s3.Client, driveSvc *drive.Service, file *drive.File, s3Bucket string, s3Key string) error {
+	resp, err := driveSvc.Files.Get(file.Id).Download()
+	if err != nil {
+		return errors.Join(errors.New(fmt.Sprintf("Unable to download file: %s: %s", file.Id, file.Name)), err)
+	}
+	defer resp.Body.Close()
+
+	tmpFile, err := os.CreateTemp("", "gdrive-")
+	if err != nil {
+		return errors.Join(errors.New("Error creating temporary file"), err)
+	}
+	defer os.Remove(tmpFile.Name()) // Clean up the temporary file
+	defer tmpFile.Close()
+
+	_, err = io.Copy(tmpFile, resp.Body)
+	if err != nil {
+		return errors.Join(errors.New(fmt.Sprint("Error copying Google Drive content to temporary file: ", tmpFile.Name())), err)
+	}
+
+	// Rewind to start of FS stream
+	_, err = tmpFile.Seek(0, io.SeekStart)
+	if err != nil {
+		return errors.Join(errors.New("Error file stream rewind"), err)
+	}
+
+	_, err = s3c.PutObject(ctx, &s3.PutObjectInput{
+			Bucket: &s3Bucket,
+			Key:    &s3Key,
+			Body:   tmpFile,
+		})
+	if err != nil {
+		return errors.Join(errors.New(fmt.Sprintf("Error S3 upload: bucket=%s key=%s file=%s", s3Bucket, s3Key, file.Name)), err)
+	}
+
+	return nil
+}
