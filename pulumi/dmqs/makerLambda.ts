@@ -1,12 +1,18 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 
+export interface DmqMakerLambdaProps {
+  codeBucket: aws.s3.BucketV2;
+  tags: aws.Tags;
+}
+
 export class DmqMakerLambda extends pulumi.ComponentResource {
   public readonly lambda: aws.lambda.Function;
+  public readonly role: aws.iam.Role;
 
   constructor(
     name: string,
-    args: { codeBucket: aws.s3.BucketV2, tags: aws.Tags },
+    args: DmqMakerLambdaProps,
     opts?: pulumi.ComponentResourceOptions,
   ) {
     super("project:components:MakerLambda", name, {}, opts);
@@ -23,30 +29,36 @@ export class DmqMakerLambda extends pulumi.ComponentResource {
       { parent: this },
     );
 
-    const assumeLambda = aws.iam.getPolicyDocumentOutput({
-      statements: [
-        {
-          effect: "Allow",
-          principals: [
-            {
-              type: "Service",
-              identifiers: ["lambda.amazonaws.com"],
-            },
-          ],
-          actions: ["sts:AssumeRole"],
-        },
-      ],
-    },{parent: this});
-    const policy = aws.iam.getPolicyDocumentOutput({
-      statements: [
-        {
-          effect: "Allow",
-          actions: ["logs:CreateLogStream", "logs:PutLogEvents"],
-          resources: [logGroup.arn, pulumi.interpolate`${logGroup.arn}:*`],
-        },
-      ],
-    },{parent: this});
-    const execRole = new aws.iam.Role(
+    const assumeLambda = aws.iam.getPolicyDocumentOutput(
+      {
+        statements: [
+          {
+            effect: "Allow",
+            principals: [
+              {
+                type: "Service",
+                identifiers: ["lambda.amazonaws.com"],
+              },
+            ],
+            actions: ["sts:AssumeRole"],
+          },
+        ],
+      },
+      { parent: this },
+    );
+    const policy = aws.iam.getPolicyDocumentOutput(
+      {
+        statements: [
+          {
+            effect: "Allow",
+            actions: ["logs:CreateLogStream", "logs:PutLogEvents"],
+            resources: [logGroup.arn, pulumi.interpolate`${logGroup.arn}:*`],
+          },
+        ],
+      },
+      { parent: this },
+    );
+    this.role = new aws.iam.Role(
       `${name}-ExecRole`,
       {
         tags: args.tags,
@@ -62,13 +74,13 @@ export class DmqMakerLambda extends pulumi.ComponentResource {
     );
 
     this.lambda = new aws.lambda.Function(
-      `${name}-Lambda`,
+      `${name}`,
       {
         tags: args.tags,
         s3Bucket: args.codeBucket.id,
         s3Key: "dmq-maker.zip",
         name: lambdaName,
-        role: execRole.arn,
+        role: this.role.arn,
         reservedConcurrentExecutions: 5,
         handler: "Lambda",
         runtime: aws.lambda.Runtime.Dotnet8,

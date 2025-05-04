@@ -36,6 +36,9 @@ async function main() {
     tags,
     codeBucket,
     apiAuthorizer: apiAuthorizer,
+    procFilesBucket,
+    rng: rngLambda.lambda,
+    gcpConfigParam,
   });
   const videoRender = new VideoRender("VideoRender", {
     meta,

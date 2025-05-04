@@ -493,7 +493,7 @@ export default class VideoRender extends pulumi.ComponentResource {
 
     this.routes = [
       {
-        path: "/unstable/v1/process/reel",
+        path: "/unstable/v2/video-render/reel",
         method: "POST",
         eventHandler: stateMachine,
         authorizer: args.apiAuthorizer,
