@@ -6,6 +6,7 @@ export interface ApiGatewayRoute {
   path: Input<string>;
   method?: Input<string>;
   eventHandler: aws.lambda.Function | aws.sfn.StateMachine;
+  stateMachineStartSync?: Input<boolean>;
   execRole?: aws.iam.Role;
   authorizer?: aws.lambda.Function;
   payloadFormatVersion?: Input<string>;
@@ -81,7 +82,7 @@ export default class ApiGatewayV2 extends pulumi.ComponentResource {
       const integrationAdditional =
         route.eventHandler instanceof aws.sfn.StateMachine
           ? {
-              integrationSubtype: "StepFunctions-StartExecution",
+              integrationSubtype: route.stateMachineStartSync ? "StepFunctions-StartSyncExecution" : "StepFunctions-StartExecution",
               requestParameters: {
                 Input: "$request.body",
                 StateMachineArn: route.eventHandler.arn,

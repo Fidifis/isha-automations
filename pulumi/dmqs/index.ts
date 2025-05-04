@@ -283,12 +283,58 @@ export class DMQs extends pulumi.ComponentResource {
         },
       }),
     }, {parent: this});
+
+    const apiGwExec = new aws.iam.Role(
+      `${name}-ApiGwExec`,
+      {
+        tags: args.meta.tags,
+        assumeRolePolicy: aws.iam.getPolicyDocumentOutput(
+          {
+            statements: [
+              {
+                effect: "Allow",
+                principals: [
+                  {
+                    type: "Service",
+                    identifiers: ["apigateway.amazonaws.com"],
+                  },
+                ],
+                actions: ["sts:AssumeRole"],
+              },
+            ],
+          },
+          { parent: this },
+        ).json,
+        inlinePolicies: [
+          {
+            policy: aws.iam.getPolicyDocumentOutput(
+              {
+                statements: [
+                  {
+                    actions: [
+                      "states:StartExecution",
+                      "states:StopExecution",
+                      "states:StartSyncExecution",
+                    ],
+                    resources: [stateMachine.arn],
+                  },
+                ],
+              },
+              { parent: this },
+            ).json,
+          },
+        ],
+      },
+      { parent: this },
+    );
+
     this.routes = [
       {
         path: "/unstable/v2/dmq/make",
         method: "POST",
-        eventHandler: makerLambda.lambda,
+        eventHandler: stateMachine,
         authorizer: args.apiAuthorizer,
+        execRole: apiGwExec,
       },
     ];
 

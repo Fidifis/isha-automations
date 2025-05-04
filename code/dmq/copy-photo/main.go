@@ -28,13 +28,13 @@ var (
 )
 
 type Event struct {
-	JobId string `json:"jobId"`
-	Direction string `json:"direction"`
-	DriveFolderId string `json:"driveFolderId"`
-	DriveId string `json:"driveId"`
-	S3Bucket string `json:"s3Bucket"`
-	S3Key string `json:"s3Key"`
-	Date time.Time `json:"date,omitempty"`
+	JobId         string    `json:"jobId"`
+	Direction     string    `json:"direction"`
+	DriveFolderId string    `json:"driveFolderId"`
+	DriveId       string    `json:"driveId"`
+	S3Bucket      string    `json:"s3Bucket"`
+	S3Key         string    `json:"s3Key"`
+	Date          time.Time `json:"date,omitempty"`
 }
 
 func main() {
@@ -66,7 +66,7 @@ func init() {
 		log.Fatal(err)
 	}
 
-	driveSvc, _, err = clientInit.InitGDrive(ctx, clientInit.GInit{ ConfigJson: &gcpConfig })
+	driveSvc, _, err = clientInit.InitGDrive(ctx, clientInit.GInit{ConfigJson: &gcpConfig})
 	if err != nil {
 		log.Fatal("Error initializig Google service client: ", err)
 	}
@@ -212,29 +212,35 @@ func HandleRequest(ctx context.Context, event Event) error {
 	case "s3ToDrive":
 		ext := ".png"
 		dateStr := fmt.Sprintf("%d-%02d-%02d", event.Date.Year(), int(event.Date.Month()), event.Date.Day())
+
 		vertical := fmt.Sprintf("%s_vertical%s", dateStr, ext)
 		square := fmt.Sprintf("%s_square%s", dateStr, ext)
 		s3Vertical := fmt.Sprintf("%s-vertical%s", event.S3Key, ext)
 		s3Square := fmt.Sprintf("%s-square%s", event.S3Key, ext)
-		err1 := fileTransfer.S3ToDrive(ctx, s3c, driveSvc, event.S3Bucket, s3Vertical, event.DriveFolderId, vertical, "")
-		err2 := fileTransfer.S3ToDrive(ctx, s3c, driveSvc, event.S3Bucket, s3Square, event.DriveFolderId, square, "")
+
+		log.Debugf("uploading from bucket=%s key=%s to driveFolder=%s file=%s", event.S3Bucket, s3Vertical, event.DriveFolderId, vertical)
+		err1 := fileTransfer.S3ToDrive(ctx, s3c, driveSvc, event.S3Bucket, s3Vertical, event.DriveFolderId, vertical, "image/png")
+
+		log.Debugf("uploading from bucket=%s key=%s to driveFolder=%s file=%s", event.S3Bucket, s3Square, event.DriveFolderId, square)
+		err2 := fileTransfer.S3ToDrive(ctx, s3c, driveSvc, event.S3Bucket, s3Square, event.DriveFolderId, square, "image/png")
+
 		if err1 != nil || err2 != nil {
 			return errors.Join(errors.New("Fail upload DMQ"), err1, err2)
 		}
+
 	case "driveToS3":
-	log.Debugf("looking for image with date %s", event.Date.String())
-	imageId, err := getImageByDate(ctx, event.DriveId, event.DriveFolderId, event.Date)
-	if err != nil {
-		return err
+		log.Debugf("looking for image with date %s", event.Date.String())
+		imageId, err := getImageByDate(ctx, event.DriveId, event.DriveFolderId, event.Date)
+		if err != nil {
+			return err
+		}
+
+		log.Debug("copy from drive to s3")
+		err = fileTransfer.DriveToS3(ctx, s3c, driveSvc, imageId, event.S3Bucket, event.S3Key)
+		if err != nil {
+			return err
+		}
 	}
 
-	log.Debug("copy from drive to s3")
-	err = fileTransfer.DriveToS3(ctx, s3c, driveSvc, imageId, event.S3Bucket, event.S3Key)
-	if err != nil {
-		return err
-	}
-	}
-
-	
 	return nil
 }
