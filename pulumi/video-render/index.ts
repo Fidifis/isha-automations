@@ -254,6 +254,7 @@ export default class VideoRender extends pulumi.ComponentResource {
         definition: pulumi.jsonStringify({
           Comment: "A description of my state machine",
           StartAt: "jobID",
+          QueryLanguage: "JSONata",
           States: {
             jobID: {
               Type: "Task",
@@ -441,7 +442,6 @@ export default class VideoRender extends pulumi.ComponentResource {
               Cause: "invalid input parameter deliveryWorkflow",
             },
           },
-          QueryLanguage: "JSONata",
         }),
       },
       { parent: this },

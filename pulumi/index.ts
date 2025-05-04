@@ -33,7 +33,7 @@ async function main() {
   });
 
   const dmqs = new DMQs("DMQs", {
-    tags,
+    meta,
     codeBucket,
     apiAuthorizer: apiAuthorizer,
     procFilesBucket,

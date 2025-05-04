@@ -11,7 +11,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
-func S3ToDrive(ctx context.Context, s3c *s3.Client, driveSvc *drive.Service, s3Bucket string, s3Key string, folderId string, fileName string) error {
+// MimeType can be empty to be autodetected
+func S3ToDrive(ctx context.Context, s3c *s3.Client, driveSvc *drive.Service, s3Bucket string, s3Key string, folderId string, fileName string, mimeType string) error {
 	s3File, err := s3c.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: &s3Bucket,
 		Key:    &s3Key,
@@ -25,7 +26,7 @@ func S3ToDrive(ctx context.Context, s3c *s3.Client, driveSvc *drive.Service, s3B
 		Create(&drive.File{
 			Name:     fileName,
 			Parents:  []string{folderId},
-			MimeType: "video/mp4",
+			MimeType: mimeType,
 		}).
 		Media(s3File.Body).
 		SupportsAllDrives(true).
