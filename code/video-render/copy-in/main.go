@@ -32,8 +32,8 @@ var (
 	driveSvc *drive.Service
 
 	// value is priority. Lower value means more important
-	videoFormats = map[string]int{".mp4": 0, ".m4v": 1, ".avi": 2, ".mov": 3}
-	audioFormats = map[string]int{".wav": 0, ".m4a": 1, ".mp3": 2, ".ogg": 3}
+	videoFormats = map[string]int{".mp4": 10, ".m4v": 9, ".avi": 8, ".mov": 7}
+	audioFormats = map[string]int{".wav": 10, ".m4a": 9, ".mp3": 8, ".ogg": 7}
 )
 
 type Event struct {
@@ -172,7 +172,7 @@ func FilterFiles(ctx context.Context, stemsId string, driveId string) (*drive.Fi
 
 	var audioFiles []*drive.File
 	var videoFile *drive.File
-	videoPrio := 10000
+	videoPrio := 0
 
 	for _, f := range files.Files {
 		normalisedName := Sanitize(f.Name)
@@ -180,11 +180,16 @@ func FilterFiles(ctx context.Context, stemsId string, driveId string) (*drive.Fi
 
 		// Try to pick the most suitable video, if videos > 1
 		if prio, ok := videoFormats[extension]; ok {
-			// Prioritise video files containg 'All video'
+			// Strongly prioritise video files containg 'All video'
 			if strings.Contains(normalisedName, "all_video") {
-				prio = prio - 100
+				prio += 100
 			}
-			if prio < videoPrio {
+			wcount := strings.Count(normalisedName, "copy")
+
+			// If there is Copy in name, prioritise it
+			prio += wcount * 10
+
+			if prio > videoPrio {
 				videoPrio = prio
 				videoFile = f
 			}
