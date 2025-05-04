@@ -29,11 +29,12 @@ var (
 
 type Event struct {
 	JobId string `json:"jobId"`
-	SourceFolderId string `json:"sourceDriveFolderId"`
+	Direction string `json:"direction"`
+	DriveFolderId string `json:"sourceDriveFolderId"`
 	DriveId string `json:"driveId"`
 	S3Bucket string `json:"s3Bucket"`
 	S3Key string `json:"s3Key"`
-	Date time.Time `json:"date"`
+	Date time.Time `json:"date,omitempty"`
 }
 
 func main() {
@@ -206,8 +207,22 @@ func getImageByDate(ctx context.Context, driveId string, searchFolderId string, 
 func HandleRequest(ctx context.Context, event Event) error {
 	log.Infof("jobid=%s", event.JobId)
 
+	log.Infof("direction=%s", event.Direction)
+	switch event.Direction {
+	case "s3ToDrive":
+		key := fmt.Sprintf("%d-%02d-%02d", event.Date.Year(), int(event.Date.Month()), event.Date.Day())
+		vertical := fmt.Sprintf("%s_vertical", key)
+		square := fmt.Sprintf("%s_square", key)
+		s3Vertical := event.S3Key + "-vertical"
+		s3Square := event.S3Key + "-square"
+		err1 := fileTransfer.S3ToDrive(ctx, s3c, driveSvc, event.S3Bucket, s3Vertical, event.DriveFolderId, vertical)
+		err2 := fileTransfer.S3ToDrive(ctx, s3c, driveSvc, event.S3Bucket, s3Square, event.DriveFolderId, square)
+		if err1 != nil || err2 != nil {
+			return errors.Join(errors.New("Fail upload DMQ"), err1, err2)
+		}
+	case "driveToS3":
 	log.Debugf("looking for image with date %s", event.Date.String())
-	imageId, err := getImageByDate(ctx, event.DriveId, event.SourceFolderId, event.Date)
+	imageId, err := getImageByDate(ctx, event.DriveId, event.DriveFolderId, event.Date)
 	if err != nil {
 		return err
 	}
@@ -217,6 +232,8 @@ func HandleRequest(ctx context.Context, event Event) error {
 	if err != nil {
 		return err
 	}
+	}
+
 	
 	return nil
 }
