@@ -27,10 +27,6 @@ var (
 	sheetSvc *sheets.Service
 )
 
-const (
-	deliverName string = "OUT_video.mp4"
-)
-
 type Event struct {
 	DeliveryParams string `json:"deliveryParams"`
 	Bucket         string `json:"bucket"`
@@ -44,7 +40,6 @@ type SheetSetCellVals struct {
 	Value     string `json:"value"`
 }
 type DeliveryParams struct {
-	VideoFolder string             `json:"videoFolderId"`
 	SheetId     string             `json:"sheetId"`
 	SetValues   []SheetSetCellVals `json:"setValues"`
 }
@@ -156,41 +151,11 @@ func WriteToSheet(ctx context.Context, params DeliveryParams) error {
 	return nil
 }
 
-func CopyToDrive(ctx context.Context, s3Bucket string, s3Key string, folderId string) error {
-	s3File, err := s3c.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: &s3Bucket,
-		Key:    &s3Key,
-	})
-	if err != nil {
-		return errors.Join(fmt.Errorf("Error downloading file from s3=%s key=%s", s3Bucket, s3Key), err)
-	}
-	defer s3File.Body.Close()
-
-	_, err = driveSvc.Files.
-		Create(&drive.File{
-			Name:     deliverName,
-			Parents:  []string{folderId},
-			MimeType: "video/mp4",
-		}).
-		Media(s3File.Body).
-		SupportsAllDrives(true).
-		Do()
-	if err != nil {
-		return errors.Join(fmt.Errorf("Error uploading file to folder=%s file=%s", folderId, deliverName), err)
-	}
-	return nil
-}
-
 func HandleRequest(ctx context.Context, event Event) error {
 	var params DeliveryParams
 	err := json.Unmarshal([]byte(event.DeliveryParams), &params)
 	if err != nil {
 		return errors.Join(errors.New("Failed to Unmarshal deliveryParams"), err)
-	}
-
-	err = CopyToDrive(ctx, event.Bucket, event.VideoKey, params.VideoFolder)
-	if err != nil {
-		return err
 	}
 
 	err = WriteToSheet(ctx, params)

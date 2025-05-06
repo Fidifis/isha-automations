@@ -5,6 +5,7 @@ import ApiAccess from "./apiAccess";
 import ApigatewayV2 from "./components/apiGateway";
 import VideoRender from "./video-render";
 import CommonRes from "./commonRes";
+import HelperLambda from "./helperLambda";
 import { MetaProps } from "./utils";
 
 async function main() {
@@ -32,6 +33,12 @@ async function main() {
     meta,
   });
 
+  const helperLambda = new HelperLambda("Helper", {
+    meta,
+    codeBucket,
+    gcpConfigParam,
+  })
+
   const dmqs = new DMQs("DMQs", {
     meta,
     codeBucket,
@@ -48,6 +55,7 @@ async function main() {
     rng: rngLambda.lambda,
     apiAuthorizer,
     gcpConfigParam,
+    fileTranferLambda: helperLambda.transferLambda.lambda,
   });
 
   new ApigatewayV2(`prime-Api`, {

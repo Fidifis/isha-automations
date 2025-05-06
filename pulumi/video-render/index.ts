@@ -12,6 +12,7 @@ export interface VideoRenderProps {
   rng: aws.lambda.Function;
   apiAuthorizer: aws.lambda.Function;
   gcpConfigParam: aws.ssm.Parameter;
+  fileTranferLambda: aws.lambda.Function;
 }
 
 export default class VideoRender extends pulumi.ComponentResource {
@@ -274,6 +275,7 @@ export default class VideoRender extends pulumi.ComponentResource {
                 jobId: "{% $states.result.Payload.result %}",
                 deliveryWorkflow: "{% $states.input.deliveryWorkflow %}",
                 delivieryParams: "{% $states.input.deliveryParams %}",
+                destinationFolderId: "{% $states.input.destinationFolderId %}",
               },
               Arguments: {
                 FunctionName: pulumi.interpolate`${args.rng.arn}:$LATEST`,
@@ -388,6 +390,32 @@ export default class VideoRender extends pulumi.ComponentResource {
                   resultFolderKey: "video-render/result/",
                   fontBucket: args.assetsBucket.id,
                   fontKey: "fonts/merriweather_sans.ttf",
+                },
+              },
+              Retry: [
+                {
+                  ErrorEquals: ["Lambda.TooManyRequestsException"],
+                  IntervalSeconds: 1,
+                  MaxAttempts: 3,
+                  BackoffRate: 2,
+                  JitterStrategy: "FULL",
+                },
+              ],
+              Next: "Copy out",
+            },
+            "Copy out": {
+              Type: "Task",
+              Resource: "arn:aws:states:::lambda:invoke",
+              Output: "{% $states.result.Payload %}",
+              Arguments: {
+                FunctionName: pulumi.interpolate`${args.fileTranferLambda.arn}:$LATEST`,
+                Payload: {
+                  direction: "s3ToDrive",
+                  s3Bucket: "isha-automations-dev-procfiles-5sy4r",
+                  s3Key: "{% 'video-render/result/' & $jobId & '/video.mp4' %}",
+                  driveFolderId: "{% $destinationFolderId %}",
+                  driveFileName: "OUT_video.mp4",
+                  mimeType: "video/mp4",
                 },
               },
               Retry: [
