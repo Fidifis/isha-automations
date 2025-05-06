@@ -411,7 +411,7 @@ export default class VideoRender extends pulumi.ComponentResource {
                 FunctionName: pulumi.interpolate`${args.fileTranferLambda.arn}:$LATEST`,
                 Payload: {
                   direction: "s3ToDrive",
-                  s3Bucket: "isha-automations-dev-procfiles-5sy4r",
+                  s3Bucket: args.procFilesBucket.id,
                   s3Key: "{% 'video-render/result/' & $jobId & '/video.mp4' %}",
                   driveFolderId: "{% $destinationFolderId %}",
                   driveFileName: "OUT_video.mp4",
