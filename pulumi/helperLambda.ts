@@ -6,7 +6,8 @@ import { MetaProps } from "./utils";
 export interface HelperProps {
   meta: MetaProps;
   codeBucket: aws.s3.BucketV2;
-  gcpConfigParam: aws.ssm.Parameter
+  procFilesBucket: aws.s3.BucketV2;
+  gcpConfigParam: aws.ssm.Parameter;
 }
 
 export default class HelperLambda extends pulumi.ComponentResource {
@@ -18,6 +19,30 @@ export default class HelperLambda extends pulumi.ComponentResource {
     opts?: pulumi.ComponentResourceOptions,
   ) {
     super("project:components:helperLambda", name, {}, opts);
+
+    const lambdaPolicy = new aws.iam.Policy(
+      `${name}-Policy`,
+      {
+        policy: aws.iam.getPolicyDocumentOutput(
+          {
+            statements: [
+              {
+                actions: ["ssm:GetParameter"],
+                resources: [args.gcpConfigParam.arn],
+              },
+              {
+                actions: ["s3:PutObject", "s3:GetObject"],
+                resources: [
+                  pulumi.interpolate`${args.procFilesBucket.arn}/*`,
+                ],
+              },
+            ],
+          },
+          { parent: this },
+        ).json,
+      },
+      { parent: this },
+    );
 
     this.transferLambda = new GoLambda(
       `${name}-TransferFiles`,
@@ -39,6 +64,17 @@ export default class HelperLambda extends pulumi.ComponentResource {
             SSM_GCP_CONFIG: args.gcpConfigParam.name,
           },
         },
+      },
+      { parent: this },
+    );
+
+    new aws.iam.PolicyAttachment(
+      `${name}-Policy`,
+      {
+        roles: [
+          this.transferLambda.role,
+        ],
+        policyArn: lambdaPolicy.arn,
       },
       { parent: this },
     );

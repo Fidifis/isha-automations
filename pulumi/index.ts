@@ -36,6 +36,7 @@ async function main() {
   const helperLambda = new HelperLambda("Helper", {
     meta,
     codeBucket,
+    procFilesBucket,
     gcpConfigParam,
   })
 
