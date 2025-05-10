@@ -5,32 +5,28 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
+	"strings"
 
 	"go.uber.org/zap"
 
 	"github.com/aws/aws-lambda-go/lambda"
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/aws/aws-sdk-go-v2/service/ssm"
+	"github.com/aws/aws-sdk-go-v2/aws"
 
-	"golang.org/x/oauth2/google"
-	"google.golang.org/api/drive/v3"
-	"google.golang.org/api/option"
 	"google.golang.org/api/sheets/v4"
+
+	"lambdalib/clientInit"
+	"lambdalib/configRead"
 )
 
 var (
-	s3c      *s3.Client
 	log      *zap.SugaredLogger
-	driveSvc *drive.Service
 	sheetSvc *sheets.Service
 )
+const errorReplKey = "$errmsg"
 
 type Event struct {
 	DeliveryParams string `json:"deliveryParams"`
-	Bucket         string `json:"bucket"`
-	VideoKey       string `json:"videoKey"`
+	ErrorDeliveryParams string `json:"errDeliveryParams"`
 }
 
 type SheetSetCellVals struct {
@@ -56,63 +52,23 @@ func init() {
 
 	ctx := context.Background()
 
-	cfg, err := config.LoadDefaultConfig(ctx)
+	var err error
+	var cfg *aws.Config
+
+	ssmc, cfg, err := clientInit.InitSSM(ctx, cfg)
 	if err != nil {
-		log.Fatal("unable to load SDK config ", err)
+		log.Fatal(err)
 	}
 
-	ssmc := ssm.NewFromConfig(cfg)
-	s3c = s3.NewFromConfig(cfg)
+	gcpConfig, err := configRead.GcpConfig(ctx, ssmc)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	err = InitDrive(ctx, ssmc)
+	sheetSvc, _, err = clientInit.InitGSheet(ctx, clientInit.GInit{ConfigJson: &gcpConfig})
 	if err != nil {
 		log.Fatal("Error initializig Google service client: ", err)
 	}
-}
-
-func GCPConfig(ctx context.Context, ssmc *ssm.Client) (*string, error) {
-	log.Debug("Reading client lib config from param store")
-	ssmConfigName := os.Getenv("SSM_GCP_CONFIG")
-	if ssmConfigName == "" {
-		log.Fatal("env SSM_GCP_CONFIG empty")
-	}
-	param, err := ssmc.GetParameter(ctx, &ssm.GetParameterInput{
-		Name: &ssmConfigName,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	result := param.Parameter.Value
-	return result, nil
-}
-
-func InitDrive(ctx context.Context, ssmc *ssm.Client) error {
-	gconf, err := GCPConfig(ctx, ssmc)
-	if err != nil {
-		return err
-	}
-
-	cred, err := google.CredentialsFromJSON(ctx, []byte(*gconf), drive.DriveScope)
-	if err != nil {
-		return errors.Join(errors.New("Error parsing JWT config"), err)
-	}
-
-	optCred := option.WithCredentials(cred)
-
-	driveService, err := drive.NewService(ctx, optCred)
-	if err != nil {
-		return errors.Join(errors.New("Error creating Drive client"), err)
-	}
-
-	sheetService, err := sheets.NewService(ctx, optCred)
-	if err != nil {
-		return errors.Join(errors.New("Error creating Sheets client"), err)
-	}
-
-	driveSvc = driveService
-	sheetSvc = sheetService
-	return nil
 }
 
 func columnToLetter(column int) string {
@@ -151,11 +107,30 @@ func WriteToSheet(ctx context.Context, params DeliveryParams) error {
 	return nil
 }
 
+func handleError(errorStr string, params *DeliveryParams) {
+	for _, p := range params.SetValues {
+		if strings.Contains(p.Value, errorReplKey) {
+			p.Value = strings.ReplaceAll(p.Value, errorReplKey, errorStr)
+		}
+	}
+}
+
 func HandleRequest(ctx context.Context, event Event) error {
+	var paramsStr string
+	if event.ErrorDeliveryParams != "" {
+		paramsStr = event.ErrorDeliveryParams
+	} else {
+		paramsStr = event.DeliveryParams
+	}
+
 	var params DeliveryParams
-	err := json.Unmarshal([]byte(event.DeliveryParams), &params)
+	err := json.Unmarshal([]byte(paramsStr), &params)
 	if err != nil {
 		return errors.Join(errors.New("Failed to Unmarshal deliveryParams"), err)
+	}
+
+	if event.ErrorDeliveryParams != "" {
+		handleError("", &params)
 	}
 
 	err = WriteToSheet(ctx, params)

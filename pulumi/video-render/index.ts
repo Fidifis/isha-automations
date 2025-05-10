@@ -275,6 +275,7 @@ export default class VideoRender extends pulumi.ComponentResource {
                 jobId: "{% $states.result.Payload.result %}",
                 deliveryWorkflow: "{% $states.input.deliveryWorkflow %}",
                 delivieryParams: "{% $states.input.deliveryParams %}",
+                errDeliveryParams: "{% $states.input.errDeliveryParams %}",
                 destinationFolderId: "{% $states.input.destinationFolderId %}",
               },
               Arguments: {
@@ -376,6 +377,12 @@ export default class VideoRender extends pulumi.ComponentResource {
                 },
               ],
               Next: "Burn to video",
+              Catch: [
+                {
+                  ErrorEquals: ["States.ALL"],
+                  Next: "Deliver error",
+                },
+              ],
             },
             "Burn to video": {
               Type: "Task",
@@ -402,6 +409,12 @@ export default class VideoRender extends pulumi.ComponentResource {
                 },
               ],
               Next: "Copy out",
+              Catch: [
+                {
+                  ErrorEquals: ["States.ALL"],
+                  Next: "Deliver error",
+                },
+              ],
             },
             "Copy out": {
               Type: "Task",
@@ -428,6 +441,12 @@ export default class VideoRender extends pulumi.ComponentResource {
                 },
               ],
               Next: "DeliverChoice",
+              Catch: [
+                {
+                  ErrorEquals: ["States.ALL"],
+                  Next: "Deliver error",
+                },
+              ],
             },
             DeliverChoice: {
               Type: "Choice",
@@ -438,7 +457,7 @@ export default class VideoRender extends pulumi.ComponentResource {
                     '{% ($deliveryWorkflow) = ("googleSpreadsheet") %}',
                 },
               ],
-              Default: "Fail",
+              Default: "Deliver param Fail",
             },
             Deliver: {
               Type: "Task",
@@ -448,9 +467,6 @@ export default class VideoRender extends pulumi.ComponentResource {
                 FunctionName: pulumi.interpolate`${lambdaDeliverGSheet.lambda.arn}:$LATEST`,
                 Payload: {
                   deliveryParams: "{% $delivieryParams %}",
-                  bucket: args.procFilesBucket.id,
-                  videoKey:
-                    "{% 'video-render/result/' & $jobId & '/video.mp4' %}",
                 },
               },
               Retry: [
@@ -463,11 +479,49 @@ export default class VideoRender extends pulumi.ComponentResource {
                 },
               ],
               End: true,
+              Catch: [
+                {
+                  ErrorEquals: ["States.ALL"],
+                  Next: "Deliver error",
+                },
+              ],
             },
-            Fail: {
+            "Deliver param Fail": {
               Type: "Fail",
               Error: "Cannot deliver",
               Cause: "invalid input parameter deliveryWorkflow",
+            },
+            "Deliver error": {
+              Type: "Task",
+              Resource: "arn:aws:states:::lambda:invoke",
+              Output: "{% $states.result.Payload %}",
+              Arguments: {
+                FunctionName: pulumi.interpolate`${lambdaDeliverGSheet.lambda.arn}:$LATEST`,
+                Payload: {
+                  deliveryParams: "{% $delivieryParams %}",
+                  errDeliveryParams: "{% $errDeliveryParams %}",
+                },
+              },
+              Retry: [
+                {
+                  ErrorEquals: [
+                    "Lambda.ServiceException",
+                    "Lambda.AWSLambdaException",
+                    "Lambda.SdkClientException",
+                    "Lambda.TooManyRequestsException",
+                  ],
+                  IntervalSeconds: 1,
+                  MaxAttempts: 3,
+                  BackoffRate: 2,
+                  JitterStrategy: "FULL",
+                },
+              ],
+              Next: "Fail",
+            },
+            Fail: {
+              Type: "Fail",
+              Error: "error",
+              Cause: "a stage has failed",
             },
           },
         }),
