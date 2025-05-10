@@ -32,7 +32,8 @@ type Event struct {
 	DestKey   string `json:"destKey"`
 
 	FontName   string `json:"fontName,omitempty"`
-	FontSize   string `json:"fontSize,omitempty"`
+	FontSize   int    `json:"fontSize,omitempty"`
+	FontWeight int    `json:"fontWeight,omitempty"`
 	TextHeight string `json:"textHeight,omitempty"`
 	Vertical   bool   `json:"vertical,omitempty"`
 }
@@ -136,7 +137,7 @@ func ffmpegConvert(ctx context.Context, srtFile string, assFile string) error {
 	return nil
 }
 
-func addStyle(ass string, fontName string, fontSize string, height string, bold bool) (string, error) {
+func addStyle(ass string, fontName string, fontSize int, height string, weight int) (string, error) {
 	lines := strings.Split(ass, "\n")
 	var output []string
 	inStyles := false
@@ -171,14 +172,14 @@ func addStyle(ass string, fontName string, fontSize string, height string, bold 
 			if fontName != "" {
 				styleFields[1] = fontName
 			}
-			if fontSize != "" {
-				styleFields[2] = fontSize
+			if fontSize != 0 {
+				styleFields[2] = strconv.Itoa(fontSize)
 			}
 			if height != "" {
 				styleFields[21] = height
 			}
-			if bold {
-				styleFields[7] = "1"
+			if weight != 0 {
+				styleFields[7] = strconv.Itoa(weight)
 			}
 
 			newStyle := "Style:" + strings.Join(styleFields, ",")
@@ -270,7 +271,7 @@ func HandleRequest(ctx context.Context, event Event) error {
 		return err
 	}
 
-	styledAssString, err := addStyle(string(assBytes), event.FontName, event.FontSize, event.TextHeight, event.Vertical)
+	styledAssString, err := addStyle(string(assBytes), event.FontName, event.FontSize, event.TextHeight, event.FontWeight)
 	if err != nil {
 		return err
 	}
