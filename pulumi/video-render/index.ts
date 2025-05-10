@@ -381,6 +381,9 @@ export default class VideoRender extends pulumi.ComponentResource {
                 {
                   ErrorEquals: ["States.ALL"],
                   Next: "Deliver error",
+                  Output: {
+                    err: "{% $states.errorOutput.Cause %}",
+                  },
                 },
               ],
             },
@@ -413,6 +416,9 @@ export default class VideoRender extends pulumi.ComponentResource {
                 {
                   ErrorEquals: ["States.ALL"],
                   Next: "Deliver error",
+                  Output: {
+                    err: "{% $states.errorOutput.Cause %}",
+                  },
                 },
               ],
             },
@@ -445,6 +451,9 @@ export default class VideoRender extends pulumi.ComponentResource {
                 {
                   ErrorEquals: ["States.ALL"],
                   Next: "Deliver error",
+                  Output: {
+                    err: "{% $states.errorOutput.Cause %}",
+                  },
                 },
               ],
             },
@@ -483,6 +492,9 @@ export default class VideoRender extends pulumi.ComponentResource {
                 {
                   ErrorEquals: ["States.ALL"],
                   Next: "Deliver error",
+                  Output: {
+                    err: "{% $states.errorOutput.Cause %}",
+                  },
                 },
               ],
             },
@@ -500,6 +512,7 @@ export default class VideoRender extends pulumi.ComponentResource {
                 Payload: {
                   deliveryParams: "{% $delivieryParams %}",
                   errDeliveryParams: "{% $errDeliveryParams %}",
+                  errMsg: "{% $states.input.err %}",
                 },
               },
               Retry: [

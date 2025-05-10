@@ -27,6 +27,7 @@ const errorReplKey = "$errmsg"
 type Event struct {
 	DeliveryParams string `json:"deliveryParams"`
 	ErrorDeliveryParams string `json:"errDeliveryParams"`
+	ErrorMessage string `json:"errMsg"`
 }
 
 type SheetSetCellVals struct {
@@ -108,9 +109,9 @@ func WriteToSheet(ctx context.Context, params DeliveryParams) error {
 }
 
 func handleError(errorStr string, params *DeliveryParams) {
-	for _, p := range params.SetValues {
+	for i, p := range params.SetValues {
 		if strings.Contains(p.Value, errorReplKey) {
-			p.Value = strings.ReplaceAll(p.Value, errorReplKey, errorStr)
+			params.SetValues[i].Value = strings.ReplaceAll(p.Value, errorReplKey, errorStr)
 		}
 	}
 }
@@ -130,7 +131,7 @@ func HandleRequest(ctx context.Context, event Event) error {
 	}
 
 	if event.ErrorDeliveryParams != "" {
-		handleError("", &params)
+		handleError(event.ErrorMessage, &params)
 	}
 
 	err = WriteToSheet(ctx, params)
