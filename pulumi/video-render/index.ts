@@ -400,7 +400,7 @@ export default class VideoRender extends pulumi.ComponentResource {
                   downloadFolderKey: "video-render/download/",
                   resultFolderKey: "video-render/result/",
                   fontBucket: args.assetsBucket.id,
-                  fontKey: "fonts/merriweather_sans.ttf",
+                  fontKey: "fonts/merriweather_sans_bold.ttf",
                 },
               },
               Retry: [

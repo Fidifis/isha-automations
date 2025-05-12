@@ -11,7 +11,8 @@ mkdir -p assets
 
 $engine run --rm \
   -v ./assets:/assets \
-  -v ./scripts/download-assets.sh:/download-assets.sh:ro \
+  -v ./scripts:/scripts:ro \
   -w /assets \
-  debian:stable-slim \
-  bash -c "apt-get update && apt-get install -y curl && /download-assets.sh"
+  python \
+  bash -c /scripts/download-assets.sh
+# bash -c "apt-get update && apt-get install -y curl zip && /scripts/download-assets.sh"
