@@ -27,24 +27,24 @@ export const AssumePolicy = aws.iam.getPolicyDocumentOutput({
 });
 
 export function HashFolder(folderPath: string): string {
-    const hash = crypto.createHash("sha256");
+  const hash = crypto.createHash("sha256");
 
-    function walk(currentPath: string) {
-        const entries = fs.readdirSync(currentPath, { withFileTypes: true });
-        for (const entry of entries) {
-            const fullPath = path.join(currentPath, entry.name);
-            if (entry.isDirectory()) {
-                walk(fullPath);
-            } else if (entry.isFile()) {
-                const content = fs.readFileSync(fullPath);
-                hash.update(content);
-            }
-        }
+  function walk(currentPath: string) {
+    const entries = fs.readdirSync(currentPath, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(currentPath, entry.name);
+      if (entry.isDirectory()) {
+        walk(fullPath);
+      } else if (entry.isFile()) {
+        const content = fs.readFileSync(fullPath);
+        hash.update(content);
+      }
     }
+  }
 
-    walk(folderPath);
+  walk(folderPath);
 
-    return hash.digest("base64");
+  return hash.digest("base64");
 }
 
 export interface GoLambdaProps {
@@ -68,6 +68,7 @@ export interface GoLambdaProps {
   env?: Input<aws.types.input.lambda.FunctionEnvironment>;
   ephemeralStorage?: Input<number>;
   layers?: Input<string>[];
+  xray?: boolean;
 }
 
 export class GoLambda extends pulumi.ComponentResource {
@@ -111,12 +112,30 @@ export class GoLambda extends pulumi.ComponentResource {
         { parent: this },
       ).json,
     };
+    const xrayPolicy = {
+      name: "XRay-metrics",
+      policy: aws.iam.getPolicyDocumentOutput(
+        {
+          statements: [
+            {
+              actions: ["xray:PutTelemetryRecords", "xray:PutTraceSegments"],
+              resources: ["*"],
+            },
+          ],
+        },
+        { parent: this },
+      ).json,
+    };
     this.role = new aws.iam.Role(
       `${name}-ExecRole`,
       {
         tags: args.tags,
         assumeRolePolicy: AssumePolicy.json,
-        inlinePolicies: [loggingPolicy, ...(args.roleInlinePolicies ?? [])],
+        inlinePolicies: [
+          loggingPolicy,
+          ...(args.xray ? [xrayPolicy] : []),
+          ...(args.roleInlinePolicies ?? []),
+        ],
       },
       { parent: this },
     );
@@ -144,6 +163,11 @@ export class GoLambda extends pulumi.ComponentResource {
         memorySize: args.memory,
         architectures: args.architecture ? [args.architecture] : undefined,
         environment: args.env,
+        tracingConfig: args.xray
+          ? {
+              mode: "Active",
+            }
+          : undefined,
         ephemeralStorage: {
           size: args.ephemeralStorage ?? 512,
         },
