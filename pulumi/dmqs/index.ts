@@ -261,7 +261,6 @@ export class DMQs extends pulumi.ComponentResource {
                 jobId: "$jobId",
                 direction: "s3ToDrive",
                 driveFolderId: "{% $input.destDriveFolderId %}",
-                driveId: "{% $input.destDriveId %}",
                 s3Bucket: args.procFilesBucket.id,
                 s3Key: "{% 'dmq/' & $jobId & '/result' %}",
                 date: "{% $input.date %}",
