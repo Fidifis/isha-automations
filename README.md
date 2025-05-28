@@ -6,7 +6,7 @@ We are using serverless AWS Lambda functions and Step Functions. Code is written
 
 # Documentation
 
-[in docs](./docs/)
+[docs](./docs/README.md)
 
 # pulumi setup
 
