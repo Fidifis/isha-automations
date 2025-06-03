@@ -73,3 +73,20 @@ func DriveToS3(ctx context.Context, s3c *s3.Client, driveSvc *drive.Service, fil
 
 	return nil
 }
+
+func S3ToLocal(ctx context.Context, s3c *s3.Client, s3Bucket string, s3Key string, fileHandle *os.File) error {
+	s3File, err := s3c.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: &s3Bucket,
+		Key:    &s3Key,
+	})
+	if err != nil {
+		return errors.Join(fmt.Errorf("Error downloading file from s3=%s key=%s", s3Bucket, s3Key), err)
+	}
+	defer s3File.Body.Close()
+
+	_, err = io.Copy(fileHandle, s3File.Body)
+	if err != nil {
+		return errors.Join(fmt.Errorf("Error writing downloaded file from s3=%s key=%s file=%s", s3Bucket, s3Key, fileHandle.Name()), err)
+	}
+	return nil
+}

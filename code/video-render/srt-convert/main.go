@@ -214,10 +214,6 @@ func s3Put(ctx context.Context, s3Bucket string, s3Key string, content io.Reader
 	return nil
 }
 
-func srtPreProcess(srtFile string) error {
-	return nil
-}
-
 func HandleRequest(ctx context.Context, event Event) error {
 	err := testFFmpeg(ctx)
 	if err != nil {
