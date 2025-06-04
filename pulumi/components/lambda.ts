@@ -71,6 +71,11 @@ export interface GoLambdaProps {
   xray?: boolean;
 }
 
+// export function constructLambdaName(nameProp: string | GoLambdaProps): string {
+//   const name = typeof nameProp === "string" ? nameProp : nameProp.name;
+//   return `${pulumi.getProject()}-${pulumi.getStack()}-${name}`;
+// }
+
 export class GoLambda extends pulumi.ComponentResource {
   public readonly lambda: aws.lambda.Function;
   public readonly role: aws.iam.Role;

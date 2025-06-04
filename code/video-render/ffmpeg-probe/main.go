@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"go.uber.org/zap"
@@ -14,6 +15,7 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 
 	"lambdalib/clientInit"
 	"lambdalib/fileTransfer"
@@ -25,12 +27,13 @@ var (
 )
 
 type Event struct {
-	S3Bucket            string `json:"s3Bucket"`
-	S3Key            string `json:"s3Key"`
+	JobId             string `json:"jobId"`
+	S3Bucket          string `json:"s3Bucket"`
+	DownloadFolderKey string `json:"downloadFolderKey"`
 }
 
 type Output struct {
-	Framerate string `json:"framerate"`
+	Framerate  string `json:"framerate"`
 	Resolution string `json:"resolution"`
 }
 
@@ -67,17 +70,6 @@ func testFFmpeg(ctx context.Context) error {
 		return errors.Join(errors.New("Failed inital ffprobe test"), err)
 	}
 	return nil
-}
-
-func s3Get(ctx context.Context, s3Bucket string, s3Key string, file string) error {
-	log.Debugf("getObject s3=%s key=%s", s3Bucket, s3Key)
-	fileHandle, err := os.Create(file)
-	if err != nil {
-		return errors.Join(fmt.Errorf("Error create a file for the download s3=%s key=%s file=%s", s3Bucket, s3Key, file), err)
-	}
-	defer fileHandle.Close()
-
-	return fileTransfer.S3ToLocal(ctx, s3c, s3Bucket, s3Key, fileHandle)
 }
 
 func getFramerate(ctx context.Context, videoFile string) (string, error) {
@@ -132,24 +124,83 @@ func getResolution(ctx context.Context, videoFile string) (string, error) {
 	return resolution, nil
 }
 
+func copyVideoIn(ctx context.Context, videoFile string, s3Bucket string, s3Key string) error {
+	log.Debugf("Downloading video from s3=%s key=%s", s3Bucket, s3Key)
+	paginator := s3.NewListObjectsV2Paginator(s3c, &s3.ListObjectsV2Input{
+		Bucket: &s3Bucket,
+		Prefix: &s3Key,
+	})
+
+	var file *types.Object
+
+	for paginator.HasMorePages() {
+		list, err := paginator.NextPage(ctx)
+		if err != nil {
+			return errors.Join(fmt.Errorf("Error listing bucket s3=%s key=%s", s3Bucket, s3Key), err)
+		}
+		for _, object := range list.Contents {
+			file = &object
+			break
+		}
+	}
+
+	if file == nil {
+		return fmt.Errorf("Nothing returned while looking for video, listing bucket s3=%s key=%s", s3Bucket, s3Key)
+	}
+
+	fileHandle, err := os.Create(videoFile)
+	if err != nil {
+		return errors.Join(fmt.Errorf("Error create a file for the download s3=%s key=%s file=%s", s3Bucket, s3Key, file), err)
+	}
+	defer fileHandle.Close()
+
+	return fileTransfer.S3ToLocal(ctx, s3c, s3Bucket, *file.Key, fileHandle)
+}
+
+func getBucketKey(jobId string, targetKey string) string {
+	if len(targetKey) > 0 && !strings.HasSuffix(targetKey, "/") {
+		targetKey = fmt.Sprintf("%s/", targetKey)
+	}
+
+	targetKey = fmt.Sprintf("%s%s/", targetKey, jobId)
+	log.Debug("S3 key: ", targetKey)
+	return targetKey
+}
+
 func HandleRequest(ctx context.Context, event Event) (Output, error) {
+	log.Infof("jobid=%s", event.JobId)
 	err := testFFmpeg(ctx)
 	if err != nil {
 		return Output{}, err
 	}
 
-	extension := strings.Split(event.S3Key, ".")[len(event.S3Key)-1]
-	videoFile, err := os.CreateTemp("", fmt.Sprintf("video-*.%s", extension))
-	defer os.Remove(videoFile.Name())
+	downloadsDir, err := os.MkdirTemp("", "downloads-")
+	if err != nil {
+		return Output{}, err
+	}
+	defer os.RemoveAll(downloadsDir)
 
-	err = fileTransfer.S3ToLocal(ctx, s3c, event.S3Bucket, event.S3Key, videoFile)
-	videoFile.Close()
+	videoFile := filepath.Join(downloadsDir, "video")
+	defer os.Remove(videoFile)
 
-	resolution, err := getResolution(ctx, videoFile.Name())
-	framerate, err := getFramerate(ctx, videoFile.Name())
+	videoFolderKey := fmt.Sprintf("%svideo/", getBucketKey(event.JobId, event.DownloadFolderKey))
+
+	err = copyVideoIn(ctx, videoFile, event.S3Bucket, videoFolderKey)
+	if err != nil {
+		return Output{}, err
+	}
+
+	resolution, err := getResolution(ctx, videoFile)
+	if err != nil {
+		return Output{}, err
+	}
+	framerate, err := getFramerate(ctx, videoFile)
+	if err != nil {
+		return Output{}, err
+	}
 
 	return Output{
 		Resolution: resolution,
-		Framerate: framerate,
+		Framerate:  framerate,
 	}, nil
 }

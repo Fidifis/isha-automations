@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -27,15 +28,16 @@ var (
 )
 
 type Event struct {
-	Bucket    string `json:"bucket"`
-	SourceKey string `json:"sourceKey"`
-	DestKey   string `json:"destKey"`
+	Bucket          string `json:"bucket"`
+	SourceKey       string `json:"sourceKey"`
+	DestKey         string `json:"destKey"`
+	VideoResolution string `json:"videoResolution"`
 
 	FontName   string `json:"fontName,omitempty"`
 	FontSize   int    `json:"fontSize,omitempty"`
 	FontWeight int    `json:"fontWeight,omitempty"`
 	TextHeight string `json:"textHeight,omitempty"`
-	Vertical   bool   `json:"vertical,omitempty"`
+	// Vertical   bool   `json:"vertical,omitempty"`
 }
 
 func main() {
@@ -194,10 +196,29 @@ func addStyle(ass string, fontName string, fontSize int, height string, weight i
 	return strings.Join(output, "\n"), nil
 }
 
-func swapResolution(ass string) string {
+func normalizeResolution(resX int, resY int) (int, int) {
+	const targetProduct = 110592
+
+	ratio := float64(resX) / float64(resY)
+	y := math.Sqrt(float64(targetProduct) / ratio)
+	x := ratio * y
+
+	return int(math.Round(x)), int(math.Round(y))
+}
+
+func writeResolution(ass string, resX int, resY int) string {
+	origX := fmt.Sprintf("PlayResX: %d", 384)
+	origY := fmt.Sprintf("PlayResY: %d", 288)
+
+	if !strings.Contains(ass, origX) || !strings.Contains(ass, origY) {
+		panic("Resolution in generated .ass file are not expected numbers")
+	}
+
+	newX, newY := normalizeResolution(resX, resY)
+
 	res := ass
-	res = strings.Replace(res, fmt.Sprintf("PlayResX: %d", 384), fmt.Sprintf("PlayResX: %d", 288), 1)
-	res = strings.Replace(res, fmt.Sprintf("PlayResY: %d", 288), fmt.Sprintf("PlayResY: %d", 384), 1)
+	res = strings.Replace(res, origX, fmt.Sprintf("PlayResX: %d", newX), 1)
+	res = strings.Replace(res, origY, fmt.Sprintf("PlayResY: %d", newY), 1)
 	return res
 }
 
@@ -214,10 +235,24 @@ func s3Put(ctx context.Context, s3Bucket string, s3Key string, content io.Reader
 	return nil
 }
 
+func isVertical(resX int, resY int) bool {
+	return resY > resX
+}
+
 func HandleRequest(ctx context.Context, event Event) error {
 	err := testFFmpeg(ctx)
 	if err != nil {
 		return err
+	}
+
+	resolution := strings.Split(event.VideoResolution, "x")
+	if len(resolution) != 2 {
+		return fmt.Errorf("videoResolution is in bad format. Expected dimensions 2, got %d", len(resolution))
+	}
+	resX, err1 := strconv.Atoi(resolution[0])
+	resY, err2 := strconv.Atoi(resolution[1])
+	if err1 != nil || err2 != nil {
+		return errors.Join(fmt.Errorf("videoResolution cannot be converted to 2 numbers"), err1, err2)
 	}
 
 	downloadsDir, err := os.MkdirTemp("", "downloads-")
@@ -248,7 +283,7 @@ func HandleRequest(ctx context.Context, event Event) error {
 	srt := string(srtBytes)
 
 	srt = fixSrtFormatting(srt)
-	if event.Vertical {
+	if isVertical(resX, resY) {
 		srt = strings.ToUpper(srt)
 	}
 
@@ -271,9 +306,7 @@ func HandleRequest(ctx context.Context, event Event) error {
 	if err != nil {
 		return err
 	}
-	if event.Vertical {
-		styledAssString = swapResolution(styledAssString)
-	}
+	styledAssString = writeResolution(styledAssString, resX, resY)
 
 	err = s3Put(ctx, event.Bucket, event.DestKey, strings.NewReader(styledAssString))
 	if err != nil {

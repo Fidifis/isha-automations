@@ -25,6 +25,8 @@ export default class VideoRender extends pulumi.ComponentResource {
   ) {
     super("project:components:video-render", name, {}, opts);
 
+    const xray = true;
+
     const lambdaPolicy = new aws.iam.Policy(
       `${name}-Policy`,
       {
@@ -68,7 +70,7 @@ export default class VideoRender extends pulumi.ComponentResource {
           s3Key: "video-render-copy-in.zip",
           hash: HashFolder("../code/video-render/copy-in/"),
         },
-        xray: true,
+        xray,
         architecture: Arch.arm,
         reservedConcurrency: 20,
         timeout: 300,
@@ -95,7 +97,7 @@ export default class VideoRender extends pulumi.ComponentResource {
           s3Key: "video-render-srt-docs-extract.zip",
           hash: HashFolder("../code/video-render/srt-docs-extract/"),
         },
-        xray: true,
+        xray,
         architecture: Arch.arm,
         reservedConcurrency: 20,
         timeout: 60,
@@ -120,7 +122,7 @@ export default class VideoRender extends pulumi.ComponentResource {
           s3Key: "video-render-deliver-gsheet.zip",
           hash: HashFolder("../code/video-render/deliver-gsheet/"),
         },
-        xray: true,
+        xray,
         architecture: Arch.arm,
         reservedConcurrency: 20,
         timeout: 300,
@@ -148,6 +150,26 @@ export default class VideoRender extends pulumi.ComponentResource {
       { parent: this },
     );
 
+    const lambdaProbe = new GoLambda(
+      `${name}-Ffprobe`,
+      {
+        tags: args.meta.tags,
+        source: {
+          s3Bucket: args.codeBucket,
+          s3Key: "video-render-ffmpeg-probe.zip",
+          hash: HashFolder("../code/video-render/ffmpeg-probe/"),
+        },
+        xray,
+        layers: [ffmpegLayer.arn],
+        reservedConcurrency: 20,
+        architecture: Arch.x86,
+        timeout: 60,
+        memory: 256,
+        logs: { retention: 30 },
+      },
+      { parent: this },
+    );
+
     const lambdaConvertSrt = new GoLambda(
       `${name}-ConvertSrt`,
       {
@@ -157,7 +179,7 @@ export default class VideoRender extends pulumi.ComponentResource {
           s3Key: "video-render-srt-convert.zip",
           hash: HashFolder("../code/video-render/srt-convert/"),
         },
-        xray: true,
+        xray,
         layers: [ffmpegLayer.arn],
         reservedConcurrency: 20,
         architecture: Arch.x86,
@@ -177,7 +199,7 @@ export default class VideoRender extends pulumi.ComponentResource {
           s3Key: "video-render-ffmpeg-burn.zip",
           hash: HashFolder("../code/video-render/ffmpeg-burn/"),
         },
-        xray: true,
+        xray,
         layers: [ffmpegLayer.arn],
         architecture: Arch.x86,
         reservedConcurrency: 5,
@@ -288,13 +310,17 @@ export default class VideoRender extends pulumi.ComponentResource {
                   JitterStrategy: "FULL",
                 },
               ],
-              Next: "Parallel",
+              Next: "Copy files in",
               Assign: {
                 jobId: "{% $states.result.Payload.result %}",
+                videoDriveFolderId: "{% $states.input.videoDriveFolderId %}",
+                videoDriveId: "{% $states.input.videoDriveId %}",
+                srtDriveFolderId: "{% $states.input.srtDriveFolderId %}",
+                srtDriveId: "{% $states.input.srtDriveId %}",
+                destinationFolderId: "{% $states.input.destinationFolderId %}",
                 deliveryWorkflow: "{% $states.input.deliveryWorkflow %}",
                 delivieryParams: "{% $states.input.deliveryParams %}",
                 errDeliveryParams: "{% $states.input.errDeliveryParams %}",
-                destinationFolderId: "{% $states.input.destinationFolderId %}",
               },
               Arguments: {
                 FunctionName: pulumi.interpolate`${args.rng.arn}:$LATEST`,
@@ -303,99 +329,27 @@ export default class VideoRender extends pulumi.ComponentResource {
                 },
               },
             },
-            Parallel: {
-              Type: "Parallel",
-              Branches: [
-                {
-                  StartAt: "Copy files in",
-                  States: {
-                    "Copy files in": {
-                      Type: "Task",
-                      Resource: "arn:aws:states:::lambda:invoke",
-                      Output: "{% $states.result.Payload %}",
-                      Arguments: {
-                        FunctionName: pulumi.interpolate`${lambdaCopyIn.lambda.arn}:$LATEST`,
-                        Payload: {
-                          sourceDriveFolderId:
-                            "{% $states.input.videoDriveFolderId %}",
-                          driveId: "{% $states.input.videoDriveId %}",
-                          jobId: "{% $jobId %}",
-                        },
-                      },
-                      Retry: [
-                        {
-                          ErrorEquals: ["Lambda.TooManyRequestsException"],
-                          IntervalSeconds: 1,
-                          MaxAttempts: 3,
-                          BackoffRate: 3,
-                          JitterStrategy: "FULL",
-                        },
-                      ],
-                      End: true,
-                    },
-                  },
+            "Copy files in": {
+              Type: "Task",
+              Resource: "arn:aws:states:::lambda:invoke",
+              Output: "{% $states.result.Payload %}",
+              Arguments: {
+                FunctionName: pulumi.interpolate`${lambdaCopyIn.lambda.arn}:$LATEST`,
+                Payload: {
+                  sourceDriveFolderId: "{% $videoDriveFolderId %}",
+                  driveId: "{% $videoDriveId %}",
+                  jobId: "{% $jobId %}",
                 },
+              },
+              Retry: [
                 {
-                  StartAt: "Extract srts in",
-                  States: {
-                    "Extract srts in": {
-                      Type: "Task",
-                      Resource: "arn:aws:states:::lambda:invoke",
-                      Output: "{% $states.result.Payload %}",
-                      Arguments: {
-                        FunctionName: pulumi.interpolate`${lambdaDocsExtract.lambda.arn}:$LATEST`,
-                        Payload: {
-                          sourceDriveFolderId:
-                            "{% $states.input.srtDriveFolderId %}",
-                          driveId: "{% $states.input.srtDriveId %}",
-                          jobId: "{% $jobId %}",
-                        },
-                      },
-                      Retry: [
-                        {
-                          ErrorEquals: ["Lambda.TooManyRequestsException"],
-                          IntervalSeconds: 1,
-                          MaxAttempts: 3,
-                          BackoffRate: 3,
-                          JitterStrategy: "FULL",
-                        },
-                      ],
-                      Next: "Convert SRT",
-                    },
-                    "Convert SRT": {
-                      Type: "Task",
-                      Resource: "arn:aws:states:::lambda:invoke",
-                      Output: "{% $states.result.Payload %}",
-                      Arguments: {
-                        FunctionName: pulumi.interpolate`${lambdaConvertSrt.lambda.arn}:$LATEST`,
-                        Payload: {
-                          bucket: args.procFilesBucket.id,
-                          sourceKey:
-                            "{% 'video-render/download/' & $jobId & '/subtitles.srt' %}",
-                          destKey:
-                            "{% 'video-render/download/' & $jobId & '/subtitles.ass' %}",
-                          fontName: "Open Sans Bold",
-                          fontSize: 22,
-                          // fontWeight: 800,
-                          textHeight: "100",
-                          vertical: true,
-                        },
-                      },
-                      Retry: [
-                        {
-                          ErrorEquals: ["Lambda.TooManyRequestsException"],
-                          IntervalSeconds: 1,
-                          MaxAttempts: 3,
-                          BackoffRate: 2,
-                          JitterStrategy: "FULL",
-                        },
-                      ],
-                      End: true,
-                    },
-                  },
+                  ErrorEquals: ["Lambda.TooManyRequestsException"],
+                  IntervalSeconds: 1,
+                  MaxAttempts: 3,
+                  BackoffRate: 3,
+                  JitterStrategy: "FULL",
                 },
               ],
-              Next: "Burn to video",
               Catch: [
                 {
                   ErrorEquals: ["States.ALL"],
@@ -405,6 +359,110 @@ export default class VideoRender extends pulumi.ComponentResource {
                   },
                 },
               ],
+              Next: "Extract srts in",
+            },
+            "Extract srts in": {
+              Type: "Task",
+              Resource: "arn:aws:states:::lambda:invoke",
+              Output: "{% $states.result.Payload %}",
+              Arguments: {
+                FunctionName: pulumi.interpolate`${lambdaDocsExtract.lambda.arn}:$LATEST`,
+                Payload: {
+                  sourceDriveFolderId: "{% $states.input.srtDriveFolderId %}",
+                  driveId: "{% $states.input.srtDriveId %}",
+                  jobId: "{% $jobId %}",
+                },
+              },
+              Retry: [
+                {
+                  ErrorEquals: ["Lambda.TooManyRequestsException"],
+                  IntervalSeconds: 1,
+                  MaxAttempts: 3,
+                  BackoffRate: 3,
+                  JitterStrategy: "FULL",
+                },
+              ],
+              Next: "Probe video meta",
+              Catch: [
+                {
+                  ErrorEquals: ["States.ALL"],
+                  Next: "Deliver error",
+                  Output: {
+                    err: "{% $states.errorOutput.Cause %}",
+                  },
+                },
+              ],
+            },
+            "Probe video meta": {
+              Type: "Task",
+              Resource: "arn:aws:states:::lambda:invoke",
+              Output: "{% $states.result.Payload %}",
+              Arguments: {
+                FunctionName: pulumi.interpolate`${lambdaProbe.lambda.arn}:$LATEST`,
+                Payload: {
+                  jobId: "{% $jobId %}",
+                  s3Bucket: args.procFilesBucket.id,
+                  downloadFolderKey: "video-render/download/",
+                },
+              },
+              Retry: [
+                {
+                  ErrorEquals: ["Lambda.TooManyRequestsException"],
+                  IntervalSeconds: 1,
+                  MaxAttempts: 3,
+                  BackoffRate: 3,
+                  JitterStrategy: "FULL",
+                },
+              ],
+              Catch: [
+                {
+                  ErrorEquals: ["States.ALL"],
+                  Next: "Deliver error",
+                  Output: {
+                    err: "{% $states.errorOutput.Cause %}",
+                  },
+                },
+              ],
+              Next: "Convert SRT",
+            },
+            "Convert SRT": {
+              Type: "Task",
+              Resource: "arn:aws:states:::lambda:invoke",
+              Output: "{% $states.result.Payload %}",
+              Arguments: {
+                FunctionName: pulumi.interpolate`${lambdaConvertSrt.lambda.arn}:$LATEST`,
+                Payload: {
+                  bucket: args.procFilesBucket.id,
+                  sourceKey:
+                    "{% 'video-render/download/' & $jobId & '/subtitles.srt' %}",
+                  destKey:
+                    "{% 'video-render/download/' & $jobId & '/subtitles.ass' %}",
+                  videoResolution: "{% $states.input.resolution %}",
+                  fontName: "Open Sans Bold",
+                  fontSize: 22,
+                  // fontWeight: 800,
+                  textHeight: "100",
+                },
+              },
+              Retry: [
+                {
+                  ErrorEquals: ["Lambda.TooManyRequestsException"],
+                  IntervalSeconds: 1,
+                  MaxAttempts: 3,
+                  BackoffRate: 2,
+                  JitterStrategy: "FULL",
+                },
+              ],
+              Catch: [
+                {
+                  ErrorEquals: ["States.ALL"],
+                  Next: "Deliver error",
+                  Output: {
+                    err: "{% $states.errorOutput.Cause %}",
+                  },
+                },
+              ],
+              Next: "Burn to video",
             },
             "Burn to video": {
               Type: "Task",
@@ -536,9 +594,7 @@ export default class VideoRender extends pulumi.ComponentResource {
               },
               Retry: [
                 {
-                  ErrorEquals: [
-                    "States.ALL",
-                  ],
+                  ErrorEquals: ["States.ALL"],
                   IntervalSeconds: 1,
                   MaxAttempts: 3,
                   BackoffRate: 2,
