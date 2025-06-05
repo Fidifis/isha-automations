@@ -125,8 +125,7 @@ export default class VideoRender extends pulumi.ComponentResource {
       {
         tags: args.meta.tags,
         source: {
-          s3Bucket: args.codeBucket,
-          s3Key: "video-render-copy-in.zip",
+          code: "../bin/video-render-copy-in.zip",
           hash: HashFolder("../code/video-render/copy-in/"),
         },
         xray,
@@ -153,8 +152,7 @@ export default class VideoRender extends pulumi.ComponentResource {
       {
         tags: args.meta.tags,
         source: {
-          s3Bucket: args.codeBucket,
-          s3Key: "video-render-srt-docs-extract.zip",
+          code: "../bin/video-render-srt-docs-extract.zip",
           hash: HashFolder("../code/video-render/srt-docs-extract/"),
         },
         xray,
@@ -179,8 +177,7 @@ export default class VideoRender extends pulumi.ComponentResource {
       {
         tags: args.meta.tags,
         source: {
-          s3Bucket: args.codeBucket,
-          s3Key: "video-render-deliver-gsheet.zip",
+          code: "../bin/video-render-deliver-gsheet.zip",
           hash: HashFolder("../code/video-render/deliver-gsheet/"),
         },
         xray,
@@ -217,8 +214,7 @@ export default class VideoRender extends pulumi.ComponentResource {
       {
         tags: args.meta.tags,
         source: {
-          s3Bucket: args.codeBucket,
-          s3Key: "video-render-ffmpeg-probe.zip",
+          code: "../bin/video-render-ffmpeg-probe.zip",
           hash: HashFolder("../code/video-render/ffmpeg-probe/"),
         },
         xray,
@@ -238,8 +234,7 @@ export default class VideoRender extends pulumi.ComponentResource {
       {
         tags: args.meta.tags,
         source: {
-          s3Bucket: args.codeBucket,
-          s3Key: "video-render-srt-convert.zip",
+          code: "../bin/video-render-srt-convert.zip",
           hash: HashFolder("../code/video-render/srt-convert/"),
         },
         xray,
@@ -259,8 +254,7 @@ export default class VideoRender extends pulumi.ComponentResource {
       {
         tags: args.meta.tags,
         source: {
-          s3Bucket: args.codeBucket,
-          s3Key: "video-render-ffmpeg-burn.zip",
+          code: "../bin/video-render-ffmpeg-burn.zip",
           hash: HashFolder("../code/video-render/ffmpeg-burn/"),
         },
         xray,
