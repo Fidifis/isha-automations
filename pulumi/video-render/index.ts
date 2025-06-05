@@ -217,6 +217,7 @@ export default class VideoRender extends pulumi.ComponentResource {
         roles: [
           lambdaDocsExtract.role,
           lambdaCopyIn.role,
+          lambdaProbe.role,
           lambdaConvertSrt.role,
           lambdaFfmpegBurn.role,
           lambdaDeliverGSheet.role,
