@@ -368,8 +368,8 @@ export default class VideoRender extends pulumi.ComponentResource {
               Arguments: {
                 FunctionName: pulumi.interpolate`${lambdaDocsExtract.lambda.arn}:$LATEST`,
                 Payload: {
-                  sourceDriveFolderId: "{% $states.input.srtDriveFolderId %}",
-                  driveId: "{% $states.input.srtDriveId %}",
+                  sourceDriveFolderId: "{% $srtDriveFolderId %}",
+                  driveId: "{% $srtDriveId %}",
                   jobId: "{% $jobId %}",
                 },
               },
