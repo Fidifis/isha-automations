@@ -1,5 +1,9 @@
 # DMQ API Reference
 
+**WARNING! The unstable APIs will be removed in future. If you experience a failure please check this page if the api was removed!**
+And check an [example](./example-apps-script.gs) how to use it.
+Future (stable) APIs will contain a speacial header to notify you in case of breaking changes.
+
 ## /unstable/v2
 
 ### POST /unstable/v2/dmq/make
