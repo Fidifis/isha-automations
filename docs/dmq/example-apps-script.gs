@@ -3,6 +3,7 @@
 
 const APIKEY = "redacted"; // API key. This key is uniqe for your team and has its usage restrictions. DO NOT SHARE THIS WITH ANYONE!
 const API_URL = "https://4zd3dwci1k.execute-api.eu-north-1.amazonaws.com"; // THE URL IS SUBJECT TO CHANGE! When it happens, call fails. Check documentation for new one.
+const API_PATH = "/unstable/v2/dmq/make"; // Path will be deprecated soon. When it happens, call fails. Check documentation for new one.
 
 const DATE_COLUMN = 1; // Column containg date of DMQ
 const DMQ_TRASNS_COLUMN = 3; // Column containg text translation
@@ -42,7 +43,7 @@ function makeDmq() {
     muteHttpExceptions: true // Idk if needed
   };
 
-  const response = UrlFetchApp.fetch(`${API_URL}/unstable/v2/dmq/make`, options); // Calls the API
+  const response = UrlFetchApp.fetch(`${API_URL}${API_PATH}`, options); // Calls the API
   const status = response.getResponseCode();
 
   // If not success, throw error
