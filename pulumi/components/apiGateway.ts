@@ -17,6 +17,7 @@ export interface ApiGatewayV2Props {
   tags: aws.Tags;
   description?: Input<string>;
   routes: ApiGatewayRoute[];
+  domain?: Input<string>;
   corsConfig?: {
     allowOrigins: Input<Input<string>[]>;
     allowMethods: Input<Input<string>[]>;
@@ -37,6 +38,8 @@ export default class ApiGatewayV2 extends pulumi.ComponentResource {
   public readonly integrations: aws.apigatewayv2.Integration[] = [];
   public readonly routes: aws.apigatewayv2.Route[] = [];
   public readonly permissions: aws.lambda.Permission[] = [];
+  public readonly domain?: aws.apigatewayv2.DomainName;
+  public readonly certificate?: aws.acm.Certificate;
   private readonly authorizers: aws.apigatewayv2.Authorizer[] = [];
 
   constructor(
@@ -83,7 +86,9 @@ export default class ApiGatewayV2 extends pulumi.ComponentResource {
       const integrationAdditional =
         route.eventHandler instanceof aws.sfn.StateMachine
           ? {
-              integrationSubtype: route.stateMachineStartSync ? "StepFunctions-StartSyncExecution" : "StepFunctions-StartExecution",
+              integrationSubtype: route.stateMachineStartSync
+                ? "StepFunctions-StartSyncExecution"
+                : "StepFunctions-StartExecution",
               requestParameters: {
                 Input: "$request.body",
                 StateMachineArn: route.eventHandler.arn,
@@ -171,12 +176,37 @@ export default class ApiGatewayV2 extends pulumi.ComponentResource {
       }
     });
 
+    if (args.domain) {
+      this.certificate = new aws.acm.Certificate(`${name}-Certificate`, {
+        domainName: args.domain,
+        validationMethod: "DNS",
+      });
+
+      this.domain = new aws.apigatewayv2.DomainName(`${name}-Domain`, {
+        domainName: args.domain,
+        domainNameConfiguration: {
+          certificateArn: this.certificate.arn,
+          endpointType: "REGIONAL",
+          ipAddressType: "dualstack",
+          securityPolicy: "TLS_1_2",
+        },
+      });
+
+      new aws.apigatewayv2.ApiMapping(`${name}-Mapping`, {
+        apiId: this.apiGateway.id,
+        domainName: this.domain.id,
+        stage: this.stage.id,
+      });
+    }
+
     this.registerOutputs({
       apiGateway: this.apiGateway,
       stage: this.stage,
       routes: this.routes,
       integrains: this.integrations,
       premissions: this.permissions,
+      domain: this.domain,
+      certificate: this.certificate,
     });
   }
 }

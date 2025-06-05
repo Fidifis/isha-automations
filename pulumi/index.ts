@@ -62,6 +62,7 @@ async function main() {
   new ApigatewayV2(`prime-Api`, {
     tags,
     routes: [...videoRender.routes, ...dmqs.routes],
+    domain: pulumi.getStack() === "live" ? "api.isha-automations.fidifis.com" : `${pulumi.getStack()}-api.isha-automations.fidifis.com` 
   });
 }
 
