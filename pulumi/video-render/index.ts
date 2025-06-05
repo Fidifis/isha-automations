@@ -1,7 +1,13 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import { ApiGatewayRoute } from "../components/apiGateway";
-import { Arch, GoLambda, HashFolder } from "../components/lambda";
+import {
+  Arch,
+  GoLambda,
+  HashFolder,
+  AssumePolicy,
+  constructLambdaName,
+} from "../components/lambda";
 import { MetaProps } from "../utils";
 
 export interface VideoRenderProps {
@@ -61,6 +67,59 @@ export default class VideoRender extends pulumi.ComponentResource {
       { parent: this },
     );
 
+    const videoRole = new aws.iam.Role(
+      `${name}-Role`,
+      {
+        tags: args.meta.tags,
+        assumeRolePolicy: AssumePolicy.json,
+        inlinePolicies: [
+          {
+            name: "logging",
+            policy: aws.iam.getPolicyDocumentOutput(
+              {
+                statements: [
+                  {
+                    actions: ["logs:CreateLogStream", "logs:PutLogEvents"],
+                    resources: [
+                      pulumi.interpolate`arn:aws:logs:${args.meta.region}:${args.meta.accountId}:log-group:/aws/lambda/${constructLambdaName(name)}*`,
+                    ],
+                  },
+                ],
+              },
+              { parent: this },
+            ).json,
+          },
+          {
+            name: "xray",
+            policy: aws.iam.getPolicyDocumentOutput(
+              {
+                statements: [
+                  {
+                    actions: [
+                      "xray:PutTelemetryRecords",
+                      "xray:PutTraceSegments",
+                    ],
+                    resources: ["*"],
+                  },
+                ],
+              },
+              { parent: this },
+            ).json,
+          },
+        ],
+      },
+      { parent: this },
+    );
+
+    new aws.iam.PolicyAttachment(
+      `${name}-Policy`,
+      {
+        roles: [videoRole],
+        policyArn: lambdaPolicy.arn,
+      },
+      { parent: this },
+    );
+
     const lambdaCopyIn = new GoLambda(
       `${name}-CopyIn`,
       {
@@ -71,6 +130,7 @@ export default class VideoRender extends pulumi.ComponentResource {
           hash: HashFolder("../code/video-render/copy-in/"),
         },
         xray,
+        role: videoRole,
         architecture: Arch.arm,
         reservedConcurrency: 20,
         timeout: 300,
@@ -98,6 +158,7 @@ export default class VideoRender extends pulumi.ComponentResource {
           hash: HashFolder("../code/video-render/srt-docs-extract/"),
         },
         xray,
+        role: videoRole,
         architecture: Arch.arm,
         reservedConcurrency: 20,
         timeout: 60,
@@ -123,6 +184,7 @@ export default class VideoRender extends pulumi.ComponentResource {
           hash: HashFolder("../code/video-render/deliver-gsheet/"),
         },
         xray,
+        role: videoRole,
         architecture: Arch.arm,
         reservedConcurrency: 20,
         timeout: 300,
@@ -160,6 +222,7 @@ export default class VideoRender extends pulumi.ComponentResource {
           hash: HashFolder("../code/video-render/ffmpeg-probe/"),
         },
         xray,
+        role: videoRole,
         layers: [ffmpegLayer.arn],
         reservedConcurrency: 20,
         architecture: Arch.x86,
@@ -180,6 +243,7 @@ export default class VideoRender extends pulumi.ComponentResource {
           hash: HashFolder("../code/video-render/srt-convert/"),
         },
         xray,
+        role: videoRole,
         layers: [ffmpegLayer.arn],
         reservedConcurrency: 20,
         architecture: Arch.x86,
@@ -200,6 +264,7 @@ export default class VideoRender extends pulumi.ComponentResource {
           hash: HashFolder("../code/video-render/ffmpeg-burn/"),
         },
         xray,
+        role: videoRole,
         layers: [ffmpegLayer.arn],
         architecture: Arch.x86,
         reservedConcurrency: 5,
@@ -207,22 +272,6 @@ export default class VideoRender extends pulumi.ComponentResource {
         memory: 2048,
         logs: { retention: 30 },
         ephemeralStorage: 10240,
-      },
-      { parent: this },
-    );
-
-    new aws.iam.PolicyAttachment(
-      `${name}-Policy`,
-      {
-        roles: [
-          lambdaDocsExtract.role,
-          lambdaCopyIn.role,
-          lambdaProbe.role,
-          lambdaConvertSrt.role,
-          lambdaFfmpegBurn.role,
-          lambdaDeliverGSheet.role,
-        ],
-        policyArn: lambdaPolicy.arn,
       },
       { parent: this },
     );

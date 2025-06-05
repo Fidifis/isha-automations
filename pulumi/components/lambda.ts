@@ -55,7 +55,7 @@ export interface GoLambdaProps {
     s3Bucket?: aws.s3.BucketV2;
     hash?: Input<string>;
   };
-  name?: Input<string>;
+  name?: string;
   handler?: Input<string>;
   timeout?: Input<number>;
   memory?: Input<number>;
@@ -64,6 +64,7 @@ export interface GoLambdaProps {
   logs?: {
     retention?: Input<number>;
   };
+  role?: aws.iam.Role;
   roleInlinePolicies?: Input<aws.types.input.iam.RoleInlinePolicy>[];
   env?: Input<aws.types.input.lambda.FunctionEnvironment>;
   ephemeralStorage?: Input<number>;
@@ -71,10 +72,10 @@ export interface GoLambdaProps {
   xray?: boolean;
 }
 
-// export function constructLambdaName(nameProp: string | GoLambdaProps): string {
-//   const name = typeof nameProp === "string" ? nameProp : nameProp.name;
-//   return `${pulumi.getProject()}-${pulumi.getStack()}-${name}`;
-// }
+export function constructLambdaName(nameProp: string | GoLambdaProps): string {
+  const name = typeof nameProp === "string" ? nameProp : nameProp.name;
+  return `${pulumi.getProject()}-${pulumi.getStack()}-${name}`;
+}
 
 export class GoLambda extends pulumi.ComponentResource {
   public readonly lambda: aws.lambda.Function;
@@ -88,7 +89,7 @@ export class GoLambda extends pulumi.ComponentResource {
   ) {
     super("fidifis:aws:LambdaGo", name, {}, opts);
 
-    const lambdaName = `${pulumi.getProject()}-${pulumi.getStack()}-${args.name ?? name}`;
+    const lambdaName = constructLambdaName(args.name ?? name);
 
     this.logGroup = new aws.cloudwatch.LogGroup(
       `${name}-Log`,
@@ -131,19 +132,24 @@ export class GoLambda extends pulumi.ComponentResource {
         { parent: this },
       ).json,
     };
-    this.role = new aws.iam.Role(
-      `${name}-ExecRole`,
-      {
-        tags: args.tags,
-        assumeRolePolicy: AssumePolicy.json,
-        inlinePolicies: [
-          loggingPolicy,
-          ...(args.xray ? [xrayPolicy] : []),
-          ...(args.roleInlinePolicies ?? []),
-        ],
-      },
-      { parent: this },
-    );
+
+    if (args.role) {
+      this.role = args.role;
+    } else {
+      this.role = new aws.iam.Role(
+        `${name}-ExecRole`,
+        {
+          tags: args.tags,
+          assumeRolePolicy: AssumePolicy.json,
+          inlinePolicies: [
+            loggingPolicy,
+            ...(args.xray ? [xrayPolicy] : []),
+            ...(args.roleInlinePolicies ?? []),
+          ],
+        },
+        { parent: this },
+      );
+    }
 
     // const builder = lambdaBuilders.buildGoOutput({
     //   code: args.code,
