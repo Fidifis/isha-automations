@@ -53,6 +53,7 @@ export default class ApiGatewayV2 extends pulumi.ComponentResource {
         protocolType: "HTTP",
         name: args.name,
         description: args.description,
+        ipAddressType: "dualstack",
         corsConfiguration: args.corsConfig
           ? {
               allowOrigins: args.corsConfig.allowOrigins,
