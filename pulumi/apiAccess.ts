@@ -1,7 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as random from "@pulumi/random";
-import { Arch, GoLambda } from "./components/lambda";
+import { Arch, GoLambda, HashFolder } from "./components/lambda";
 import { MetaProps } from "./utils";
 
 export interface ApiAccessProps {
@@ -46,8 +46,8 @@ export default class ApiAccess extends pulumi.ComponentResource {
       {
         tags: args.meta.tags,
         source: {
-          s3Bucket: args.codeBucket,
-          s3Key: "authorizer-psk.zip",
+          code: "../bin/authorizer-psk.zip",
+          hash: HashFolder("../code/authorizer-psk/"),
         },
         architecture: Arch.arm,
         logs: { retention: 14 },
