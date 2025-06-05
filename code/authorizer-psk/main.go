@@ -38,9 +38,9 @@ func getParameters(ctx context.Context) (map[string]string, error) {
 
 	ssmPath := getSSMPath()
 
-	log.Debug("Loading keys from parameter store. ID: ", ssmPath)
+	log.Debug("Loading keys from parameter store. Path: ", ssmPath)
 
-	leMap := make(map[string]string)
+	keyMap := make(map[string]string)
 
 	firstRun := true
 	var nextToken *string = nil
@@ -60,21 +60,22 @@ func getParameters(ctx context.Context) (map[string]string, error) {
 
 		nextToken = response.NextToken
 
-		for i := range response.Parameters {
-			name := strings.Replace(*response.Parameters[i].Name, ssmPath, "", 1)
-			value := *response.Parameters[i].Value
-			leMap[name] = value
+		for _, param := range response.Parameters {
+			name := strings.TrimPrefix(*param.Name, ssmPath+"/")
+			keyMap[*param.Value] = name
 		}
 	}
-	log.Debug("Loaded ", len(leMap), "parameters")
 
-	cachedKeys = leMap
-	return leMap, nil
+	log.Debug("Loaded ", len(keyMap), " API keys")
+
+	cachedKeys = keyMap
+	return keyMap, nil
 }
 
 func main() {
 	lambda.Start(HandleRequest)
 }
+
 func init() {
 	logConfig := zap.NewProductionConfig()
 	logConfig.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
@@ -90,27 +91,26 @@ func init() {
 	ssmc = ssm.NewFromConfig(cfg)
 }
 
-func validate(keys map[string]string, keyId string, key string) bool {
-	log.Info("Presented auth key for: ", keyId)
-	v, ok := keys[keyId]
-	return ok && v == key
+func validate(keys map[string]string, apiKey string) (bool, string) {
+	name, ok := keys[apiKey]
+	return ok, name
 }
 
 func HandleRequest(ctx context.Context, event events.APIGatewayV2CustomAuthorizerV2Request) (events.APIGatewayV2CustomAuthorizerSimpleResponse, error) {
-	keyId, okId := event.Headers["x-auth-id"]
-	key, okKey := event.Headers["x-auth-key"]
+	apiKey, ok := event.Headers["x-api-key"]
 
 	keyMap, err := getParameters(ctx)
 	if err != nil {
 		log.Fatal("error reading from parameter store. ", err)
 	}
 
-	var valid bool
-	if okId && okKey {
-		valid = validate(keyMap, keyId, key)
+	valid := false
+	if ok {
+		var name string
+		valid, name = validate(keyMap, apiKey)
+		log.Info("key belongs to: ", name)
 	} else {
-		valid = false
-		log.Info("request doesn't have expected headers")
+		log.Info("request doesn't have x-api-key header")
 	}
 
 	log.Info("request validity: ", valid)
