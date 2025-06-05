@@ -2,8 +2,8 @@
 // Future (stable) APIs will contain a speacial header to notify you in case of breaking changes.
 
 const APIKEY = "redacted"; // API key. This key is uniqe for your team and has its usage restrictions. DO NOT SHARE THIS WITH ANYONE!
-const API_URL = "https://4zd3dwci1k.execute-api.eu-north-1.amazonaws.com"; // THE URL IS SUBJECT TO CHANGE! When it happens, call fails. Check documentation for new one.
-const API_PATH = "/unstable/v2/dmq/make"; // Path will be deprecated soon. When it happens, call fails. Check documentation for new one.
+const API_URL = "api.isha-automations.fidifis.com"; // URL of API to call
+const API_PATH = "/unstable/v2/dmq/make"; // Unstable path will be deprecated soon. When it happens, call fails. Check documentation for newest path.
 
 const DATE_COLUMN = 1; // Column containg date of DMQ
 const DMQ_TRASNS_COLUMN = 3; // Column containg text translation
@@ -22,7 +22,7 @@ function makeDmq() {
   const translated = sheet.getRange(activeCell.row, DMQ_TRASNS_COLUMN).getValue(); // Get translated text
 
   const date = sheet.getRange(activeCell.row, DATE_COLUMN).getValue(); // Get date
-  const stdDate = Utilities.formatDate(date, Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"); // Convert to standard RFC-3339 / ISO-8601 date format
+  const stdDate = Utilities.formatDate(date, Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ss'Z'"); // Convert to standard RFC-3339 / ISO-8601 date format
 
   // Object with the request payload
   const options = {
@@ -43,7 +43,7 @@ function makeDmq() {
     muteHttpExceptions: true // Idk if needed
   };
 
-  const response = UrlFetchApp.fetch(`${API_URL}${API_PATH}`, options); // Calls the API
+  const response = UrlFetchApp.fetch(`https://${API_URL}${API_PATH}`, options); // Calls the API
   const status = response.getResponseCode();
 
   // If not success, throw error
