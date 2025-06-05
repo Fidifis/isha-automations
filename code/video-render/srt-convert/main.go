@@ -235,8 +235,9 @@ func s3Put(ctx context.Context, s3Bucket string, s3Key string, content io.Reader
 	return nil
 }
 
+// When resolution is equal, isVertical is true. Reels are sometimes square format. To keep formating of reels / shorts consistent, assume squares are vertical
 func isVertical(resX int, resY int) bool {
-	return resY > resX
+	return resY >= resX
 }
 
 func HandleRequest(ctx context.Context, event Event) error {
