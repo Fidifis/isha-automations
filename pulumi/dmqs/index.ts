@@ -213,8 +213,8 @@ export class DMQs extends pulumi.ComponentResource {
             "Next": "Map",
             "Output": {
               fontMap: {
-                "Merriweather": "fonts/merriweather_sans_bold.ttf",
-                "Open Sans": "fonts/open_sans_bold.ttf"
+                "Merriweather": "fonts/merriweather_sans.ttf",
+                "Open Sans": "fonts/open_sans_bold.ttf",
               }
             }
           },
