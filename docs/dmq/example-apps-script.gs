@@ -39,6 +39,7 @@ function makeDmq() {
       "sourceDriveId": IMAGES_DRIVE_ID, // TODO: Make this optional
       "sourceDriveFolderId": IMAGES_FOLDER_ID, // TODO: Make this optional
       "destDriveFolderId": DESTINATION_FOLDER_ID,
+      // "font": "Merriweather", // font is optional and should be used when a language is not supported by default (global) font
     }),
     muteHttpExceptions: true // Idk if needed
   };
