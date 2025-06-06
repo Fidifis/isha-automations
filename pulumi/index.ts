@@ -43,6 +43,7 @@ async function main() {
   const dmqs = new DMQs("DMQs", {
     meta,
     codeBucket,
+    assetsBucket,
     apiAuthorizer: apiAuthorizer,
     procFilesBucket,
     rng: rngLambda.lambda,

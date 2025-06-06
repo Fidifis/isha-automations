@@ -9,6 +9,7 @@ export interface DMQsProps {
   meta: MetaProps;
   codeBucket: aws.s3.BucketV2;
   procFilesBucket: aws.s3.BucketV2;
+  assetsBucket: aws.s3.BucketV2;
   apiAuthorizer: aws.lambda.Function;
   gcpConfigParam: aws.ssm.Parameter;
   rng: aws.lambda.Function;
@@ -195,10 +196,20 @@ export class DMQs extends pulumi.ComponentResource {
                 JitterStrategy: "FULL",
               },
             ],
-            Next: "Map",
+            Next: "Inject fonts map",
             Assign: {
               input: "{% $states.input %}",
             },
+          },
+          "Inject fonts map": {
+            "Type": "Pass",
+            "Next": "Map",
+            "Output": {
+              fontMap: {
+                "Merriweather": "fonts/merriweather_sans_bold.ttf",
+                "Open Sans": "fonts/open_sans_bold.ttf"
+              }
+            }
           },
           Map: {
             Type: "Map",
@@ -222,6 +233,8 @@ export class DMQs extends pulumi.ComponentResource {
                       s3Key: "{% 'dmq/' & $jobId & '/request' %}",
                       resultS3Key:
                         "{% 'dmq/' & $jobId & '/result-' & $states.input.suffix & '.png' %}",
+                      fontS3Bucket: args.assetsBucket.id,
+                      fontS3Key: "{% $exists($input.font) ? $lookup($states.input.fontMap, $input.font) : null %}",
                     },
                   },
                   Retry: [
@@ -243,10 +256,12 @@ export class DMQs extends pulumi.ComponentResource {
               {
                 resolution: [1080, 1080],
                 suffix: "square",
+                fontMap: "{% $states.input.fontMap %}"
               },
               {
                 resolution: [1080, 1350],
                 suffix: "vertical",
+                fontMap: "{% $states.input.fontMap %}"
               },
             ],
             Next: "Copy out",
