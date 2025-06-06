@@ -39,6 +39,13 @@ export class DMQs extends pulumi.ComponentResource {
                 ],
               },
               {
+                effect: "Allow",
+                actions: ["s3:GetObject"],
+                resources: [
+                  pulumi.interpolate`${args.assetsBucket.arn}/fonts/*`,
+                ],
+              },
+              {
                 actions: ["ssm:GetParameter"],
                 resources: [args.gcpConfigParam.arn],
               },
@@ -234,7 +241,7 @@ export class DMQs extends pulumi.ComponentResource {
                       resultS3Key:
                         "{% 'dmq/' & $jobId & '/result-' & $states.input.suffix & '.png' %}",
                       fontS3Bucket: args.assetsBucket.id,
-                      fontS3Key: "{% $exists($input.font) ? $lookup($states.input.fontMap, $input.font) : null %}",
+                      fontS3Key: "{% $states.input.font %}",
                     },
                   },
                   Retry: [
@@ -256,12 +263,12 @@ export class DMQs extends pulumi.ComponentResource {
               {
                 resolution: [1080, 1080],
                 suffix: "square",
-                fontMap: "{% $states.input.fontMap %}"
+                font: "{% $exists($input.font) ? $lookup($states.input.fontMap, $input.font) : null %}",
               },
               {
                 resolution: [1080, 1350],
                 suffix: "vertical",
-                fontMap: "{% $states.input.fontMap %}"
+                font: "{% $exists($input.font) ? $lookup($states.input.fontMap, $input.font) : null %}",
               },
             ],
             Next: "Copy out",
