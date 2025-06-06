@@ -1,5 +1,9 @@
 # Documentation
 
+## Services
+
+- [Daily Mystic Quotes (DMQ)](./dmq/README.md)
+
 ## Google integration
 
 As Isha uses Google Drive as a content storage, most of (or rather all) services needs access to your Google Drive.
@@ -54,6 +58,12 @@ To use API provide this values in headers of each request.
 
 Currently we use HTTP API gateway with custom authorizer. For future we plan using a REST api with Api keys and Usage plans. **So the API key may change in future!** There shouldn't be any other change for api consumers.
 
-## Services
+## Fonts
 
-- [Daily Mystic Quotes (DMQ)](./dmq/README.md)
+This table tracks what fonts are used for what purpose
+
+| Font              | S3 Key                | Purpose      |
+|-------------------|-----------------------|--------------|
+| Open Sans (bold)  | open_sans_bold.ttf    | Video render |
+| Merriweather Sans | merriweather_sans.ttf | DMQ fallback |
+|                   |                       |              |
