@@ -58,6 +58,14 @@ To use API provide this values in headers of each request.
 
 Currently we use HTTP API gateway with custom authorizer. For future we plan using a REST api with Api keys and Usage plans. **So the API key may change in future!** There shouldn't be any other change for api consumers.
 
+### The source
+
+The API keys are stored inside AWS Systems Manager Parameter Store.
+The Authorizer Lambda has a base path to recursively search for keys.
+Currently this is set to `/isha/auth/{env}`
+Then follows a key name - composed of department and sub-entity (country code, in case of Global Reach) 
+`/isha/auth/live/GR/cz`
+
 ## Fonts
 
 This table tracks what fonts are used for what purpose
