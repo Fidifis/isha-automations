@@ -12,18 +12,16 @@ import (
 
 	"go.uber.org/zap"
 
-	// "github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
-	// "github.com/aws/aws-lambda-go/lambdacontext"
-	// "github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 
-	// "golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/option"
+
+	"lambdalib/random"
 )
 
 var (
@@ -31,7 +29,6 @@ var (
 	log       *zap.SugaredLogger
 	driveSvc *drive.Service
 
-	// value is priority. Lower value means more important
 	videoFormats = map[string]int{".mp4": 10, ".m4v": 9, ".avi": 8, ".mov": 7}
 	audioFormats = map[string]int{".wav": 10, ".m4a": 9, ".mp3": 8, ".ogg": 7}
 )
@@ -226,6 +223,9 @@ func FilterFiles(ctx context.Context, stemsId string, driveId string) (*drive.Fi
 	var videoFile *drive.File
 	videoPrio := 0
 
+	rand := random.NewRandom()
+	random.Shuffle(rand, files.Files)
+
 	for _, f := range files.Files {
 		normalisedName := Sanitize(f.Name)
 		extension := filepath.Ext(normalisedName)
@@ -338,32 +338,3 @@ func HandleRequest(ctx context.Context, event Event) (error) {
 
 	return nil
 }
-
-// func ErrResponse(response string, ctx *lambdacontext.LambdaContext) (events.APIGatewayV2HTTPResponse, error) {
-// 	execId := ctx.AwsRequestID
-// 	responseBody, _ := json.Marshal(map[string]string{
-// 		"error":     response,
-// 		"execution": execId,
-// 	})
-// 	return events.APIGatewayV2HTTPResponse{
-// 		StatusCode: 400,
-// 		Body:       string(responseBody),
-// 		Headers: map[string]string{
-// 			"Content-Type": "application/json",
-// 		},
-// 	}, nil
-// }
-// func OkResponse(response *map[string]any) (events.APIGatewayV2HTTPResponse, error) {
-// 	responseBody, err := json.Marshal(response)
-// 	if err != nil {
-// 		log.Error("Marshaling response ", err.Error())
-// 		return events.APIGatewayV2HTTPResponse{}, err
-// 	}
-// 	return events.APIGatewayV2HTTPResponse{
-// 		StatusCode: 200,
-// 		Body:       string(responseBody),
-// 		Headers: map[string]string{
-// 			"Content-Type": "application/json",
-// 		},
-// 	}, nil
-// }

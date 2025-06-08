@@ -1,6 +1,8 @@
 module receive_dmq
 
-go 1.23.6
+go 1.24.2
+
+replace lambdalib => ../../lib
 
 require (
 	github.com/aws/aws-lambda-go v1.48.0
@@ -10,6 +12,7 @@ require (
 	go.uber.org/zap v1.27.0
 	golang.org/x/oauth2 v0.29.0
 	google.golang.org/api v0.231.0
+	lambdalib v0.0.0-00010101000000-000000000000
 )
 
 require (
