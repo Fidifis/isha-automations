@@ -158,7 +158,7 @@ func FindStemsFolder(ctx context.Context, folderId string, driveId string) (stri
 func FindStemsOCDLink(ctx context.Context, folderId string, driveId string) (string, error) {
 	stemsIter, err := driveSvc.Files.List().
 		Context(ctx).
-		Q(fmt.Sprintf("'%s' in parents and trashed = false and mimeType = 'application/vnd.google-apps.shortcut' and name = 'Stems'", folderId)).
+		Q(fmt.Sprintf("'%s' in parents and trashed = false and mimeType = 'application/vnd.google-apps.shortcut'", folderId)).
 		Fields("files(id, name, shortcutDetails)").
 		Corpora("drive").
 		SupportsAllDrives(true).
