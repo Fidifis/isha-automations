@@ -223,10 +223,11 @@ func FilterFiles(ctx context.Context, stemsId string, driveId string) (*drive.Fi
 	var videoFile *drive.File
 	videoPrio := 0
 
+	filesShuffled := files.Files
 	rand := random.NewRandom()
 	random.Shuffle(rand, files.Files)
 
-	for _, f := range files.Files {
+	for _, f := range filesShuffled {
 		normalisedName := Sanitize(f.Name)
 		extension := filepath.Ext(normalisedName)
 
