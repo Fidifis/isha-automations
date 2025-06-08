@@ -187,7 +187,6 @@ export default class VideoRender extends pulumi.ComponentResource {
         timeout: 300,
         memory: 256,
         logs: { retention: 30 },
-        ephemeralStorage: 4096,
         env: {
           variables: {
             SSM_GCP_CONFIG: args.gcpConfigParam.name,
@@ -224,6 +223,7 @@ export default class VideoRender extends pulumi.ComponentResource {
         architecture: Arch.x86,
         timeout: 60,
         memory: 256,
+        ephemeralStorage: 10240,
         logs: { retention: 30 },
       },
       { parent: this },
