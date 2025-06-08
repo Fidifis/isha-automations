@@ -51,6 +51,7 @@ export default class ApiAccess extends pulumi.ComponentResource {
         },
         architecture: Arch.arm,
         logs: { retention: 14 },
+        xray: true,
         env: {
           variables: {
             SSM_LOOKUP_PATH: `/isha/auth/${pulumi.getStack()}`,

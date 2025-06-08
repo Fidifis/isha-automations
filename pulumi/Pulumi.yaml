@@ -5,6 +5,9 @@ runtime:
   options:
     packagemanager: npm
 config:
+  aws:profile: fidifis-isha-automations
+  aws:region: eu-north-1
+
   pulumi:tags:
     value:
       pulumi:template: serverless-aws-typescript

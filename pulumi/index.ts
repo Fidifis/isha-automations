@@ -8,7 +8,14 @@ import CommonRes from "./commonRes";
 import HelperLambda from "./helperLambda";
 import { MetaProps } from "./utils";
 
+interface ConfigDomains {
+  api: string
+}
+
 async function main() {
+  const config = new pulumi.Config();
+  const domains = config.requireObject<ConfigDomains>("domains")
+
   const tags = {
     project: pulumi.getProject(),
     env: pulumi.getStack(),
@@ -63,7 +70,7 @@ async function main() {
   new ApigatewayV2(`prime-Api`, {
     tags,
     routes: [...videoRender.routes, ...dmqs.routes],
-    domain: pulumi.getStack() === "live" ? "api.isha-automations.fidifis.com" : `${pulumi.getStack()}-api.isha-automations.fidifis.com` 
+    domain: domains.api
   });
 }
 

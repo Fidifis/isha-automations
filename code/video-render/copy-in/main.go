@@ -131,7 +131,7 @@ func getBucket(jobId string) (string, string) {
 	return targetBucket, targetKey
 }
 
-func FindStems(ctx context.Context, folderId string, driveId string) (*drive.File, error) {
+func FindStemsFolder(ctx context.Context, folderId string, driveId string) (string, error) {
 	stemsIter, err := driveSvc.Files.List().
 		Context(ctx).
 		Q(fmt.Sprintf("'%s' in parents and trashed = false and mimeType = 'application/vnd.google-apps.folder' and name = 'Stems'", folderId)).
@@ -142,13 +142,65 @@ func FindStems(ctx context.Context, folderId string, driveId string) (*drive.Fil
 		DriveId(driveId).
 		Do()
 	if err != nil {
-		return nil, errors.Join(errors.New(fmt.Sprint("Error finding stems in: ", folderId)), err)
+		return "", errors.Join(errors.New(fmt.Sprint("Error finding stems in: ", folderId)), err)
+	}
+	if stemsIter.NextPageToken != "" {
+		log.Warn("Next Page Token is present. Pagination is not implemented. This may cause an absence of materials.")
 	}
 
 	if len(stemsIter.Files) == 0 {
-		return nil, errors.Join(errors.New(fmt.Sprint("There is no folder Stems in: ", folderId)), err)
+		return "", nil
 	}
-	return stemsIter.Files[0], nil
+
+	return stemsIter.Files[0].Id, nil
+}
+
+func FindStemsOCDLink(ctx context.Context, folderId string, driveId string) (string, error) {
+	stemsIter, err := driveSvc.Files.List().
+		Context(ctx).
+		Q(fmt.Sprintf("'%s' in parents and trashed = false and mimeType = 'application/vnd.google-apps.shortcut' and name = 'Stems'", folderId)).
+		Fields("files(id, name, shortcutDetails)").
+		Corpora("drive").
+		SupportsAllDrives(true).
+		IncludeItemsFromAllDrives(true).
+		DriveId(driveId).
+		Do()
+	if err != nil {
+		return "", errors.Join(errors.New(fmt.Sprint("Error finding stems in: ", folderId)), err)
+	}
+	if stemsIter.NextPageToken != "" {
+		log.Warn("Next Page Token is present. Pagination is not implemented. This may cause an absence of materials.")
+	}
+
+	if len(stemsIter.Files) > 1 {
+		log.Warn("When searching for stems, encountered more than 1 link in folder ", folderId, " Only the first link pointing to folder type is followed.")
+	}
+
+	for _, file := range stemsIter.Files {
+		if file.ShortcutDetails.TargetMimeType == "application/vnd.google-apps.folder" {
+			return file.ShortcutDetails.TargetId, nil
+		}
+	}
+	return "", nil
+}
+
+func FindStems(ctx context.Context, folderId string, driveId string) (string, error) {
+	stems, err := FindStemsFolder(ctx, folderId, driveId)
+	if err != nil {
+		return "", err
+	}
+	if stems != "" {
+		return stems, nil
+	}
+	log.Info("No Stems here. Trying to find link (OCD - youtube stems).")
+	stems, err = FindStemsOCDLink(ctx, folderId, driveId)
+	if err != nil {
+		return "", err
+	}
+	if stems != "" {
+		return stems, nil
+	}
+	return "", errors.Join(errors.New(fmt.Sprint("There is no folder Stems or stem link in: ", folderId)), err)
 }
 
 func FilterFiles(ctx context.Context, stemsId string, driveId string) (*drive.File, []*drive.File, error) {
@@ -265,7 +317,7 @@ func HandleRequest(ctx context.Context, event Event) (error) {
 		return err
 	}
 
-	videoFile, audioFiles, err := FilterFiles(ctx, stems.Id, event.DriveId)
+	videoFile, audioFiles, err := FilterFiles(ctx, stems, event.DriveId)
 	if err != nil {
 		return err
 	}
