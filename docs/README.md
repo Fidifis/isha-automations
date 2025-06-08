@@ -3,6 +3,7 @@
 ## Services
 
 - [Daily Mystic Quotes (DMQ)](./dmq/README.md)
+- [Video Render](./video-render/README.md)
 
 ## Google integration
 
@@ -71,7 +72,6 @@ Then follows a key name - composed of department and sub-entity (country code, i
 This table tracks what fonts are used for what purpose
 
 | Font              | S3 Key                | Purpose      |
-|-------------------|-----------------------|--------------|
+| ----------------- | --------------------- | ------------ |
 | Open Sans (bold)  | open_sans_bold.ttf    | Video render |
 | Merriweather Sans | merriweather_sans.ttf | DMQ fallback |
-|                   |                       |              |
