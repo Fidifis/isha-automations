@@ -359,6 +359,7 @@ export default class VideoRender extends pulumi.ComponentResource {
                 jobId: "{% $states.result.Payload.result %}",
                 videoDriveFolderId: "{% $states.input.videoDriveFolderId %}",
                 videoDriveId: "{% $states.input.videoDriveId %}",
+                videoFileId: "{% $exists($states.input.videoFileId) ? $states.input.videoFileId : null %}",
                 srtDriveFolderId: "{% $states.input.srtDriveFolderId %}",
                 srtDriveId: "{% $states.input.srtDriveId %}",
                 destinationFolderId: "{% $states.input.destinationFolderId %}",
@@ -383,6 +384,7 @@ export default class VideoRender extends pulumi.ComponentResource {
                   sourceDriveFolderId: "{% $videoDriveFolderId %}",
                   driveId: "{% $videoDriveId %}",
                   jobId: "{% $jobId %}",
+                  videoFileId: "{% $videoFileId %}",
                 },
               },
               Retry: [

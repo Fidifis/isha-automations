@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -21,12 +20,13 @@ import (
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/option"
 
+	"lambdalib/fileTransfer"
 	"lambdalib/random"
 )
 
 var (
-	s3c       *s3.Client
-	log       *zap.SugaredLogger
+	s3c      *s3.Client
+	log      *zap.SugaredLogger
 	driveSvc *drive.Service
 
 	videoFormats = map[string]int{".mp4": 10, ".m4v": 9, ".avi": 8, ".mov": 7}
@@ -34,9 +34,10 @@ var (
 )
 
 type Event struct {
-	JobId string `json:"jobId"`
+	JobId          string `json:"jobId"`
 	SourceFolderId string `json:"sourceDriveFolderId"`
-	DriveId string `json:"driveId"`
+	DriveId        string `json:"driveId"`
+	VideoFileId    string `json:"videoFileId"`
 }
 
 func main() {
@@ -123,7 +124,7 @@ func getBucket(jobId string) (string, string) {
 		targetKey = fmt.Sprintf("%s/", targetKey)
 	}
 
-  targetKey = fmt.Sprintf("%s%s/", targetKey, jobId)
+	targetKey = fmt.Sprintf("%s%s/", targetKey, jobId)
 	log.Debug("S3 key: ", targetKey)
 	return targetBucket, targetKey
 }
@@ -200,7 +201,7 @@ func FindStems(ctx context.Context, folderId string, driveId string) (string, er
 	return "", errors.Join(errors.New(fmt.Sprint("There is no folder Stems or stem link in: ", folderId)), err)
 }
 
-func FilterFiles(ctx context.Context, stemsId string, driveId string) (*drive.File, []*drive.File, error) {
+func FilterFiles(ctx context.Context, stemsId string, driveId string, skipVideo bool) (*drive.File, []*drive.File, error) {
 	// There is a possible nextPageToken field.
 	// I do ignore it as I expect only a few files.
 	files, err := driveSvc.Files.List().
@@ -252,7 +253,7 @@ func FilterFiles(ctx context.Context, stemsId string, driveId string) (*drive.Fi
 			audioFiles = append(audioFiles, f)
 		}
 	}
-	if videoFile == nil {
+	if videoFile == nil && !skipVideo {
 		return nil, nil, errors.New("No video file found in stems")
 	}
 	if len(audioFiles) == 0 {
@@ -262,52 +263,10 @@ func FilterFiles(ctx context.Context, stemsId string, driveId string) (*drive.Fi
 	return videoFile, audioFiles, nil
 }
 
-func drive2s3(ctx context.Context, file *drive.File, targetBucket string, targetKey string) error {
-	resp, err := driveSvc.Files.Get(file.Id).Download()
-	if err != nil {
-		return errors.Join(errors.New(fmt.Sprintf("Unable to download file: %s: %s", file.Id, file.Name)), err)
-	}
-	defer resp.Body.Close()
-
-	tmpFile, err := os.CreateTemp("", "gdrive-")
-	if err != nil {
-		 log.Error("Error creating temporary file: ", err)
-		return errors.Join(errors.New("Error creating temporary file"), err)
-	}
-	defer os.Remove(tmpFile.Name()) // Clean up the temporary file
-	defer tmpFile.Close()
-
-	log.Debug("Downloading Google Drive file to temporary storage: ", tmpFile.Name())
-
-	copyBytes, err := io.Copy(tmpFile, resp.Body)
-	if err != nil {
-		return errors.Join(errors.New(fmt.Sprint("Error copying Google Drive content to temporary file: ", tmpFile.Name())), err)
-	}
-	log.Debug("Bytes Downloaded ", copyBytes)
-
-	// Rewind to start of FS stream
-	_, err = tmpFile.Seek(0, io.SeekStart)
-	if err != nil {
-		return errors.Join(errors.New("Error file stream rewind"), err)
-	}
-
-  // bKey := fmt.Sprintf("%s%s", targetKey, Sanitize(file.Name))
-	_, err = s3c.PutObject(ctx, &s3.PutObjectInput{
-			Bucket: &targetBucket,
-			Key:    &targetKey,
-			Body:   tmpFile,
-		})
-	if err != nil {
-		return errors.Join(errors.New(fmt.Sprintf("Error S3 upload: bucket=%s key=%s file: %s", targetBucket, targetKey, file.Name)), err)
-	}
-
-	return nil
-}
-
-func HandleRequest(ctx context.Context, event Event) (error) {
+func HandleRequest(ctx context.Context, event Event) error {
 	// lctx, ok := lambdacontext.FromContext(ctx)
 	// if !ok {
-	// 	log.Fatal("Unable to read Lambda Context")
+	//	log.Fatal("Unable to read Lambda Context")
 	// }
 
 	log.Infof("jobid=%s", event.JobId)
@@ -318,20 +277,27 @@ func HandleRequest(ctx context.Context, event Event) (error) {
 		return err
 	}
 
-	videoFile, audioFiles, err := FilterFiles(ctx, stems, event.DriveId)
+	var videoFileId string
+	videoFile, audioFiles, err := FilterFiles(ctx, stems, event.DriveId, event.VideoFileId != "")
 	if err != nil {
 		return err
 	}
+	if event.VideoFileId != "" {
+		videoFileId = event.VideoFileId
+		log.Info("Using video specified in request: ", videoFileId)
+	} else {
+		videoFileId = videoFile.Id
+	}
 
-  bKey := fmt.Sprintf("%svideo/video%s", targetKey, filepath.Ext(videoFile.Name))
-	err = drive2s3(ctx, videoFile, targetBucket, bKey)
+	bKey := fmt.Sprintf("%svideo/video%s", targetKey, filepath.Ext(videoFile.Name)) // BUG: When file doesn't exist, this fails
+	err = fileTransfer.DriveToS3(ctx, s3c, driveSvc, videoFileId, targetBucket, bKey) // TODO: add ability to append file extension in file transfer lib
 	if err != nil {
 		return err
 	}
 
 	for i, audioFile := range audioFiles {
 		bKey := fmt.Sprintf("%saudio/audio_%d%s", targetKey, i, filepath.Ext(audioFile.Name))
-		err = drive2s3(ctx, audioFile, targetBucket, bKey)
+		err = fileTransfer.DriveToS3(ctx, s3c, driveSvc, audioFile.Id, targetBucket, bKey)
 		if err != nil {
 			return err
 		}
