@@ -2,7 +2,7 @@ import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import { DMQs } from "./dmqs";
 import ApiAccess from "./apiAccess";
-import ApigatewayV2 from "./components/apiGateway";
+import { ApiGatewayV2, RestApiGateway } from "./components/apiGateway";
 import VideoRender from "./video-render";
 import CommonRes from "./commonRes";
 import HelperLambda from "./helperLambda";
@@ -67,10 +67,16 @@ async function main() {
     fileTranferLambda: helperLambda.transferLambda.lambda,
   });
 
-  new ApigatewayV2(`prime-Api`, {
+  new RestApiGateway(`rest-Api`, {
     tags,
     routes: [...videoRender.routes, ...dmqs.routes],
     domain: domains.api
+  });
+
+  new ApiGatewayV2(`prime-Api`, {
+    tags,
+    routes: [...videoRender.routes, ...dmqs.routes],
+    // domain: domains.api
   });
 }
 

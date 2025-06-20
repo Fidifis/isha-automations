@@ -244,6 +244,7 @@ export class RestApiGateway extends pulumi.ComponentResource {
       { parent: this },
     );
 
+    let madeResources = new Set();
     args.routes.forEach((route, index) => {
       const method = route.method ?? "POST";
       const pathParts = route.path.toString().split('/').filter(part => part !== '');
@@ -254,6 +255,10 @@ export class RestApiGateway extends pulumi.ComponentResource {
       // Create nested resources for path segments
       pathParts.forEach((part, partIndex) => {
         resourcePath += `/${part}`;
+        if (madeResources.has(resourcePath)) {
+          return;
+        }
+        madeResources.add(resourcePath);
         const resourceName = `${name}-Res-${index}-${partIndex}`;
         
         const resource = new aws.apigateway.Resource(
@@ -402,7 +407,7 @@ export class RestApiGateway extends pulumi.ComponentResource {
       `${name}-Domain`,
       {
         domainName: args.domain,
-        certificateArn: this.certificate.arn,
+        regionalCertificateArn: this.certificate.arn,
         endpointConfiguration: {
           types: "REGIONAL",
         },
