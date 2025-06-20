@@ -244,7 +244,7 @@ export class RestApiGateway extends pulumi.ComponentResource {
       { parent: this },
     );
 
-    let madeResources = new Set();
+    let madeResources = new Map<string, pulumi.Output<string>>();
     args.routes.forEach((route, index) => {
       const method = route.method ?? "POST";
       const pathParts = route.path.toString().split('/').filter(part => part !== '');
@@ -256,9 +256,9 @@ export class RestApiGateway extends pulumi.ComponentResource {
       pathParts.forEach((part, partIndex) => {
         resourcePath += `/${part}`;
         if (madeResources.has(resourcePath)) {
+          currentResource = madeResources.get(resourcePath)!;
           return;
         }
-        madeResources.add(resourcePath);
         const resourceName = `${name}-Res-${index}-${partIndex}`;
         
         const resource = new aws.apigateway.Resource(
@@ -273,6 +273,7 @@ export class RestApiGateway extends pulumi.ComponentResource {
         
         this.resources.push(resource);
         currentResource = resource.id;
+        madeResources.set(resourcePath, resource.id);
       });
 
       // Create authorizer if needed
