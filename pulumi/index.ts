@@ -9,12 +9,12 @@ import HelperLambda from "./helperLambda";
 import { MetaProps } from "./utils";
 
 interface ConfigDomains {
-  api: string
+  api: string;
 }
 
 async function main() {
   const config = new pulumi.Config();
-  const domains = config.requireObject<ConfigDomains>("domains")
+  const domains = config.requireObject<ConfigDomains>("domains");
 
   const tags = {
     project: pulumi.getProject(),
@@ -45,7 +45,7 @@ async function main() {
     codeBucket,
     procFilesBucket,
     gcpConfigParam,
-  })
+  });
 
   const dmqs = new DMQs("DMQs", {
     meta,
@@ -69,12 +69,16 @@ async function main() {
     tags,
     // authorizer: apiAuthorizer,
     domain: domains.api,
-    usagePlans: [{
-      name: "gr-cz",
-      apiKeys: [{
-        name: "prim",
-      }]
-    }],
+    usagePlans: [
+      {
+        name: "gr-cz",
+        apiKeys: [
+          {
+            name: "prim",
+          },
+        ],
+      },
+    ],
     routes: [...videoRender.routes, ...dmqs.routes],
   });
 }

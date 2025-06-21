@@ -21,7 +21,7 @@ export interface UsagePlan {
   apiKeys: ApiKey[];
   throttle?: Input<aws.types.input.apigateway.UsagePlanThrottleSettings>;
   quota?: Input<aws.types.input.apigateway.UsagePlanQuotaSettings>;
-};
+}
 
 export interface ApiGatewayProps {
   name?: Input<string>;
@@ -77,58 +77,68 @@ export default class RestApiGateway extends pulumi.ComponentResource {
     );
 
     if (args.authorizer) {
-      const { apiAuthorizer } = this.CreateAuthorizer(name, "global", args.authorizer);
+      const { apiAuthorizer } = this.CreateAuthorizer(
+        name,
+        "global",
+        args.authorizer,
+      );
       this.globalAuthorizer = apiAuthorizer;
     }
 
     let apiKeyActive = false;
 
-      args.usagePlans?.forEach(planProp => {
-        const plan = new aws.apigateway.UsagePlan(
-          `${name}-${planProp.name}`,
-          {
-            tags: args.tags,
-            apiStages: [{
+    args.usagePlans?.forEach((planProp) => {
+      const plan = new aws.apigateway.UsagePlan(
+        `${name}-${planProp.name}`,
+        {
+          tags: args.tags,
+          apiStages: [
+            {
               apiId: this.apiGateway.id,
               stage: this.stage.stageName,
-            }],
-            throttleSettings: planProp.throttle,
-            quotaSettings: planProp.quota,
+            },
+          ],
+          throttleSettings: planProp.throttle,
+          quotaSettings: planProp.quota,
+        },
+        { parent: this },
+      );
+      this.usagePlans.push(plan);
+
+      planProp.apiKeys.forEach((apiKeyProp) => {
+        apiKeyActive = true;
+        const apiKey = new aws.apigateway.ApiKey(
+          `${name}-${planProp.name}-${apiKeyProp.name}`,
+          {
+            tags: args.tags,
+            value: apiKeyProp.customValue,
           },
           { parent: this },
         );
-        this.usagePlans.push(plan);
+        this.apiKeys.push(apiKey);
 
-        planProp.apiKeys.forEach(apiKeyProp => {
-          apiKeyActive = true;
-          const apiKey = new aws.apigateway.ApiKey(
-            `${name}-${planProp.name}-${apiKeyProp.name}`,
-            {
-              tags: args.tags,
-              value: apiKeyProp.customValue,
-            },
-            { parent: this },
-          )
-          this.apiKeys.push(apiKey);
-
-          new aws.apigateway.UsagePlanKey(
-            `${name}-${planProp.name}-${apiKeyProp.name}`,
-            {
-              keyId: apiKey.id,
-              usagePlanId: plan.id,
-              keyType: "API_KEY",
-            },
-            { parent: this },
-          )
-        })
+        new aws.apigateway.UsagePlanKey(
+          `${name}-${planProp.name}-${apiKeyProp.name}`,
+          {
+            keyId: apiKey.id,
+            usagePlanId: plan.id,
+            keyType: "API_KEY",
+          },
+          { parent: this },
+        );
       });
+    });
 
     let madeResources = new Map<string, pulumi.Output<string>>();
     args.routes.forEach((route, index) => {
       const method = route.method ?? "POST";
-      const pathParts = route.path.toString().split('/').filter(part => part !== '');
-      
-      let currentResource: pulumi.Output<string> = this.apiGateway.rootResourceId;
+      const pathParts = route.path
+        .toString()
+        .split("/")
+        .filter((part) => part !== "");
+
+      let currentResource: pulumi.Output<string> =
+        this.apiGateway.rootResourceId;
       let resourcePath = "";
 
       // Create nested resources for path segments
@@ -139,7 +149,7 @@ export default class RestApiGateway extends pulumi.ComponentResource {
           return;
         }
         const resourceName = `${name}-Res-${index}-${partIndex}`;
-        
+
         const resource = new aws.apigateway.Resource(
           resourceName,
           {
@@ -149,16 +159,21 @@ export default class RestApiGateway extends pulumi.ComponentResource {
           },
           { parent: this },
         );
-        
+
         this.resources.push(resource);
         currentResource = resource.id;
         madeResources.set(resourcePath, resource.id);
       });
 
       // Create authorizer if needed
-      let authorizer: aws.apigateway.Authorizer | null = this.globalAuthorizer ?? null;
+      let authorizer: aws.apigateway.Authorizer | null =
+        this.globalAuthorizer ?? null;
       if (route.authorizer) {
-        const { apiAuthorizer } = this.CreateAuthorizer(name, index.toString(), route.authorizer)
+        const { apiAuthorizer } = this.CreateAuthorizer(
+          name,
+          index.toString(),
+          route.authorizer,
+        );
         authorizer = apiAuthorizer;
       }
 
@@ -178,24 +193,25 @@ export default class RestApiGateway extends pulumi.ComponentResource {
       this.methods.push(apiMethod);
 
       // Create integration
-      const integrationConfig = route.eventHandler instanceof aws.sfn.StateMachine
-        ? {
-            type: "AWS",
-            integrationHttpMethod: "POST",
-            uri: pulumi.interpolate`arn:aws:apigateway:${aws.getRegionOutput().name}:states:action/${route.stateMachineStartSync ? "StartSyncExecution" : "StartExecution"}`,
-            credentials: route.execRole?.arn,
-            requestTemplates: {
-              "application/json": pulumi.interpolate`{
+      const integrationConfig =
+        route.eventHandler instanceof aws.sfn.StateMachine
+          ? {
+              type: "AWS",
+              integrationHttpMethod: "POST",
+              uri: pulumi.interpolate`arn:aws:apigateway:${aws.getRegionOutput().name}:states:action/${route.stateMachineStartSync ? "StartSyncExecution" : "StartExecution"}`,
+              credentials: route.execRole?.arn,
+              requestTemplates: {
+                "application/json": pulumi.interpolate`{
                 "input": "$util.escapeJavaScript($input.json('$'))",
                 "stateMachineArn": "${route.eventHandler.arn}"
               }`,
-            },
-          }
-        : {
-            type: "AWS_PROXY",
-            integrationHttpMethod: "POST",
-            uri: route.eventHandler.invokeArn,
-          };
+              },
+            }
+          : {
+              type: "AWS_PROXY",
+              integrationHttpMethod: "POST",
+              uri: route.eventHandler.invokeArn,
+            };
 
       const integration = new aws.apigateway.Integration(
         `${name}-Integration-${index}`,
@@ -230,9 +246,9 @@ export default class RestApiGateway extends pulumi.ComponentResource {
         restApi: this.apiGateway.id,
         description: "Deployment for REST API",
       },
-      { 
+      {
         parent: this,
-        dependsOn: [...this.methods, ...this.integrations]
+        dependsOn: [...this.methods, ...this.integrations],
       },
     );
 
@@ -251,41 +267,40 @@ export default class RestApiGateway extends pulumi.ComponentResource {
 
     // Handle custom domain if provided
     if (args.domain) {
-    this.certificate = new aws.acm.Certificate(
-      `${name}-Certificate`,
-      {
-        domainName: args.domain,
-        validationMethod: "DNS",
-        tags: args.tags,
-      },
-      { parent: this },
-    );
-
-    this.domain = new aws.apigateway.DomainName(
-      `${name}-Domain`,
-      {
-        domainName: args.domain,
-        regionalCertificateArn: args.edge ? undefined : this.certificate.arn,
-        certificateArn: args.edge ? this.certificate.arn : undefined,
-        endpointConfiguration: {
-          types: args.edge ? "EDGE" : "REGIONAL",
-          ipAddressType: "dualstack",
+      this.certificate = new aws.acm.Certificate(
+        `${name}-Certificate`,
+        {
+          domainName: args.domain,
+          validationMethod: "DNS",
+          tags: args.tags,
         },
-        tags: args.tags,
-      },
-      { parent: this },
-    );
+        { parent: this },
+      );
 
-    this.basePathMapping = new aws.apigateway.BasePathMapping(
-      `${name}-Mapping`,
-      {
-        restApi: this.apiGateway.id,
-        stageName: this.stage.stageName,
-        domainName: this.domain.domainName,
-      },
-      { parent: this },
-    );
+      this.domain = new aws.apigateway.DomainName(
+        `${name}-Domain`,
+        {
+          domainName: args.domain,
+          regionalCertificateArn: args.edge ? undefined : this.certificate.arn,
+          certificateArn: args.edge ? this.certificate.arn : undefined,
+          endpointConfiguration: {
+            types: args.edge ? "EDGE" : "REGIONAL",
+            ipAddressType: "dualstack",
+          },
+          tags: args.tags,
+        },
+        { parent: this },
+      );
 
+      this.basePathMapping = new aws.apigateway.BasePathMapping(
+        `${name}-Mapping`,
+        {
+          restApi: this.apiGateway.id,
+          stageName: this.stage.stageName,
+          domainName: this.domain.domainName,
+        },
+        { parent: this },
+      );
     }
 
     this.registerOutputs({
@@ -304,7 +319,11 @@ export default class RestApiGateway extends pulumi.ComponentResource {
     });
   }
 
-  private CreateAuthorizer(namePre: string, namePost: string, authorizerFn: aws.lambda.Function) {
+  private CreateAuthorizer(
+    namePre: string,
+    namePost: string,
+    authorizerFn: aws.lambda.Function,
+  ) {
     const apiAuthorizer = new aws.apigateway.Authorizer(
       `${namePre}-Authorizer-${namePost}`,
       {
