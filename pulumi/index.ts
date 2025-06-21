@@ -69,6 +69,7 @@ async function main() {
     tags,
     // authorizer: apiAuthorizer,
     domain: domains.api,
+    xray: true,
     usagePlans: [
       {
         name: "gr-cz",
