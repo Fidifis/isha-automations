@@ -157,6 +157,7 @@ export default class RestApiGateway extends pulumi.ComponentResource {
           httpMethod: apiMethod.httpMethod,
           statusCode: "200",
         },
+        { parent: this },
       );
 
       // Create integration
@@ -197,9 +198,10 @@ export default class RestApiGateway extends pulumi.ComponentResource {
         {
           restApi: this.apiGateway.id,
           resourceId: currentResource,
-          httpMethod: integration.httpMethod,// NOTE: All the dependencies here and around, are to create good dependency tree for correct deploy order.
+          httpMethod: integration.httpMethod, // NOTE: All the dependencies here and around, are to create good dependency tree for correct deploy order.
           statusCode: methodResponse.statusCode,
         },
+        { parent: this },
       );
 
       if (route.eventHandler instanceof aws.lambda.Function) {
