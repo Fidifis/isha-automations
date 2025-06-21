@@ -85,6 +85,31 @@ export default class RestApiGateway extends pulumi.ComponentResource {
       this.globalAuthorizer = apiAuthorizer;
     }
 
+    this.deployment = new aws.apigateway.Deployment(
+      `${name}-Deployment`,
+      {
+        restApi: this.apiGateway.id,
+        description: "Deployment for REST API",
+      },
+      {
+        parent: this,
+        dependsOn: [...this.methods, ...this.integrations],
+      },
+    );
+
+    // Create stage
+    this.stage = new aws.apigateway.Stage(
+      `${name}-Stage`,
+      {
+        restApi: this.apiGateway.id,
+        deployment: this.deployment.id,
+        stageName: args.stage?.name ?? "api",
+        tags: args.tags,
+        xrayTracingEnabled: args.xray,
+      },
+      { parent: this },
+    );
+
     let apiKeyActive = false;
 
     args.usagePlans?.forEach((planProp) => {
@@ -239,31 +264,6 @@ export default class RestApiGateway extends pulumi.ComponentResource {
         this.permissions.push(permission);
       }
     });
-
-    this.deployment = new aws.apigateway.Deployment(
-      `${name}-Deployment`,
-      {
-        restApi: this.apiGateway.id,
-        description: "Deployment for REST API",
-      },
-      {
-        parent: this,
-        dependsOn: [...this.methods, ...this.integrations],
-      },
-    );
-
-    // Create stage
-    this.stage = new aws.apigateway.Stage(
-      `${name}-Stage`,
-      {
-        restApi: this.apiGateway.id,
-        deployment: this.deployment.id,
-        stageName: args.stage?.name ?? "api",
-        tags: args.tags,
-        xrayTracingEnabled: args.xray,
-      },
-      { parent: this },
-    );
 
     // Handle custom domain if provided
     if (args.domain) {
