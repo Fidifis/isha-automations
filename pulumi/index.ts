@@ -72,6 +72,14 @@ async function main() {
     usagePlans: [
       {
         name: "gr-cz",
+        throttle: {
+          burstLimit: 10,
+          rateLimit: 1,
+        },
+        quota: {
+          limit: 30,
+          period: "DAY",
+        },
         apiKeys: [
           {
             name: "prim",
