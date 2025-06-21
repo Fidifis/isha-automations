@@ -18,6 +18,7 @@ export interface ApiGatewayProps {
   description?: Input<string>;
   routes: ApiGatewayRoute[];
   domain?: Input<string>;
+  edge?: Input<boolean>;
   corsConfig?: {
     allowOrigins: Input<Input<string>[]>;
     allowMethods: Input<Input<string>[]>;
@@ -238,7 +239,7 @@ export class RestApiGateway extends pulumi.ComponentResource {
         description: args.description,
         tags: args.tags,
         endpointConfiguration: {
-          types: "REGIONAL",
+          types: args.edge ? "EDGE" : "REGIONAL",
         },
       },
       { parent: this },
@@ -408,9 +409,10 @@ export class RestApiGateway extends pulumi.ComponentResource {
       `${name}-Domain`,
       {
         domainName: args.domain,
-        regionalCertificateArn: this.certificate.arn,
+        regionalCertificateArn: args.edge ? undefined : this.certificate.arn,
+        certificateArn: args.edge ? this.certificate.arn : undefined,
         endpointConfiguration: {
-          types: "REGIONAL",
+          types: args.edge ? "EDGE" : "REGIONAL",
         },
         tags: args.tags,
       },
