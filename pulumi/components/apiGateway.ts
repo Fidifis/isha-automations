@@ -387,7 +387,7 @@ export class RestApiGateway extends pulumi.ComponentResource {
       {
         restApi: this.apiGateway.id,
         deployment: this.deployment.id,
-        stageName: args.stage?.name ?? "prod",
+        stageName: args.stage?.name ?? "api",
         tags: args.tags,
       },
       { parent: this },
