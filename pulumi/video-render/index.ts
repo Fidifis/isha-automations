@@ -16,7 +16,6 @@ export interface VideoRenderProps {
   procFilesBucket: aws.s3.BucketV2;
   assetsBucket: aws.s3.BucketV2;
   rng: aws.lambda.Function;
-  apiAuthorizer: aws.lambda.Function;
   gcpConfigParam: aws.ssm.Parameter;
   fileTranferLambda: aws.lambda.Function;
 }
@@ -709,7 +708,6 @@ export default class VideoRender extends pulumi.ComponentResource {
         path: "/unstable/v2/video-render/reel",
         method: "POST",
         eventHandler: stateMachine,
-        authorizer: args.apiAuthorizer,
         execRole: apiGwExec,
       },
     ];

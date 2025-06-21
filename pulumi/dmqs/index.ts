@@ -10,7 +10,6 @@ export interface DMQsProps {
   codeBucket: aws.s3.BucketV2;
   procFilesBucket: aws.s3.BucketV2;
   assetsBucket: aws.s3.BucketV2;
-  apiAuthorizer: aws.lambda.Function;
   gcpConfigParam: aws.ssm.Parameter;
   rng: aws.lambda.Function;
 }
@@ -354,7 +353,6 @@ export class DMQs extends pulumi.ComponentResource {
         path: "/unstable/v2/dmq/make",
         method: "POST",
         eventHandler: stateMachine,
-        authorizer: args.apiAuthorizer,
         execRole: apiGwExec,
       },
     ];

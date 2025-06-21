@@ -9,7 +9,6 @@ export interface ApiGatewayRoute {
   stateMachineStartSync?: Input<boolean>;
   execRole?: aws.iam.Role;
   authorizer?: aws.lambda.Function;
-  payloadFormatVersion?: Input<string>;
 }
 
 export interface ApiGatewayProps {
@@ -20,200 +19,14 @@ export interface ApiGatewayProps {
   domain?: Input<string>;
   edge?: Input<boolean>;
   xray?: Input<boolean>;
-  corsConfig?: {
-    allowOrigins: Input<Input<string>[]>;
-    allowMethods: Input<Input<string>[]>;
-    allowHeaders?: Input<Input<string>[]>;
-    exposeHeaders?: Input<Input<string>[]>;
-    maxAge?: Input<number>;
-    allowCredentials?: Input<boolean>;
-  };
   stage?: {
     name?: Input<string>;
     autoDeployEnabled?: Input<boolean>;
   };
+  authorizer?: aws.lambda.Function;
 }
 
-export class ApiGatewayV2 extends pulumi.ComponentResource {
-  public readonly apiGateway: aws.apigatewayv2.Api;
-  public readonly stage: aws.apigatewayv2.Stage;
-  public readonly integrations: aws.apigatewayv2.Integration[] = [];
-  public readonly routes: aws.apigatewayv2.Route[] = [];
-  public readonly permissions: aws.lambda.Permission[] = [];
-  public readonly domain?: aws.apigatewayv2.DomainName;
-  public readonly certificate?: aws.acm.Certificate;
-  private readonly authorizers: aws.apigatewayv2.Authorizer[] = [];
-
-  constructor(
-    name: string,
-    args: ApiGatewayProps,
-    opts?: pulumi.ComponentResourceOptions,
-  ) {
-    super("fidifis:aws:ApiGatewayV2", name, {}, opts);
-
-    this.apiGateway = new aws.apigatewayv2.Api(
-      name,
-      {
-        tags: args.tags,
-        protocolType: "HTTP",
-        name: args.name,
-        description: args.description,
-        ipAddressType: "dualstack",
-        corsConfiguration: args.corsConfig
-          ? {
-              allowOrigins: args.corsConfig.allowOrigins,
-              allowMethods: args.corsConfig.allowMethods,
-              allowHeaders: args.corsConfig.allowHeaders,
-              exposeHeaders: args.corsConfig.exposeHeaders,
-              maxAge: args.corsConfig.maxAge,
-              allowCredentials: args.corsConfig.allowCredentials || false,
-            }
-          : undefined,
-      },
-      { parent: this },
-    );
-
-    this.stage = new aws.apigatewayv2.Stage(
-      `${name}-Stage`,
-      {
-        apiId: this.apiGateway.id,
-        name: args.stage?.name ?? "$default",
-        autoDeploy: args.stage?.autoDeployEnabled ?? true,
-        tags: args.tags,
-      },
-      { parent: this },
-    );
-
-    args.routes.forEach((route, index) => {
-      const integrationAdditional =
-        route.eventHandler instanceof aws.sfn.StateMachine
-          ? {
-              integrationSubtype: route.stateMachineStartSync
-                ? "StepFunctions-StartSyncExecution"
-                : "StepFunctions-StartExecution",
-              requestParameters: {
-                Input: "$request.body",
-                StateMachineArn: route.eventHandler.arn,
-              },
-              payloadFormatVersion: route.payloadFormatVersion ?? "1.0",
-            }
-          : {
-              integrationUri: route.eventHandler.invokeArn,
-              payloadFormatVersion: route.payloadFormatVersion ?? "2.0",
-              integrationMethod: "POST",
-            };
-      const integration = new aws.apigatewayv2.Integration(
-        `${name}-integration-${index}`,
-        {
-          apiId: this.apiGateway.id,
-          integrationType: "AWS_PROXY",
-          credentialsArn: route.execRole?.arn,
-          ...integrationAdditional,
-        },
-        { parent: this },
-      );
-      this.integrations.push(integration);
-
-      const authorizer = route.authorizer
-        ? new aws.apigatewayv2.Authorizer(
-            `${name}-authorizer-${index}`,
-            {
-              apiId: this.apiGateway.id,
-              authorizerType: "REQUEST",
-              authorizerUri: route.authorizer.invokeArn,
-              authorizerPayloadFormatVersion: "2.0",
-              enableSimpleResponses: true,
-            },
-            { parent: this },
-          )
-        : null;
-      if (authorizer) {
-        this.authorizers.push(authorizer);
-      }
-
-      const apiRoute = new aws.apigatewayv2.Route(
-        `${name}-route-${index}`,
-        {
-          apiId: this.apiGateway.id,
-          routeKey:
-            route.path === "$default"
-              ? route.path
-              : `${route.method ?? "POST"} ${route.path}`,
-          target: pulumi.interpolate`integrations/${integration.id}`,
-          authorizationType: route.authorizer ? "CUSTOM" : "NONE",
-          authorizerId: authorizer?.id,
-        },
-        { parent: this },
-      );
-      this.routes.push(apiRoute);
-
-      if (route.eventHandler instanceof aws.lambda.Function) {
-        const permission = new aws.lambda.Permission(
-          `${name}-permission-${index}`,
-          {
-            action: "lambda:InvokeFunction",
-            function: route.eventHandler.name,
-            principal: "apigateway.amazonaws.com",
-            sourceArn: pulumi.interpolate`${this.apiGateway.executionArn}/*`,
-          },
-          { parent: this },
-        );
-        this.permissions.push(permission);
-      }
-
-      const authorizerPermission = route.authorizer
-        ? new aws.lambda.Permission(
-            `${name}-authPermission-${index}`,
-            {
-              action: "lambda:InvokeFunction",
-              function: route.authorizer.name,
-              principal: "apigateway.amazonaws.com",
-              sourceArn: pulumi.interpolate`${this.apiGateway.executionArn}/*`,
-            },
-            { parent: this },
-          )
-        : null;
-      if (authorizerPermission) {
-        this.permissions.push(authorizerPermission);
-      }
-    });
-
-    if (args.domain) {
-      this.certificate = new aws.acm.Certificate(`${name}-Certificate`, {
-        domainName: args.domain,
-        validationMethod: "DNS",
-      });
-
-      this.domain = new aws.apigatewayv2.DomainName(`${name}-Domain`, {
-        domainName: args.domain,
-        domainNameConfiguration: {
-          certificateArn: this.certificate.arn,
-          endpointType: "REGIONAL",
-          ipAddressType: "dualstack",
-          securityPolicy: "TLS_1_2",
-        },
-      });
-
-      new aws.apigatewayv2.ApiMapping(`${name}-Mapping`, {
-        apiId: this.apiGateway.id,
-        domainName: this.domain.id,
-        stage: this.stage.id,
-      });
-    }
-
-    this.registerOutputs({
-      apiGateway: this.apiGateway,
-      stage: this.stage,
-      routes: this.routes,
-      integrains: this.integrations,
-      premissions: this.permissions,
-      domain: this.domain,
-      certificate: this.certificate,
-    });
-  }
-}
-
-export class RestApiGateway extends pulumi.ComponentResource {
+export default class RestApiGateway extends pulumi.ComponentResource {
   public readonly apiGateway: aws.apigateway.RestApi;
   public readonly deployment: aws.apigateway.Deployment;
   public readonly stage: aws.apigateway.Stage;
@@ -224,7 +37,8 @@ export class RestApiGateway extends pulumi.ComponentResource {
   public readonly domain?: aws.apigateway.DomainName;
   public readonly certificate?: aws.acm.Certificate;
   public readonly basePathMapping?: aws.apigateway.BasePathMapping;
-  private readonly authorizers: aws.apigateway.Authorizer[] = [];
+  public readonly globalAuthorizer?: aws.apigateway.Authorizer;
+  public readonly authorizers: aws.apigateway.Authorizer[] = [];
 
   constructor(
     name: string,
@@ -246,6 +60,11 @@ export class RestApiGateway extends pulumi.ComponentResource {
       },
       { parent: this },
     );
+
+    if (args.authorizer) {
+      const { apiAuthorizer } = this.CreateAuthorizer(name, "global", args.authorizer);
+      this.globalAuthorizer = apiAuthorizer;
+    }
 
     let madeResources = new Map<string, pulumi.Output<string>>();
     args.routes.forEach((route, index) => {
@@ -280,34 +99,10 @@ export class RestApiGateway extends pulumi.ComponentResource {
       });
 
       // Create authorizer if needed
-      let authorizer: aws.apigateway.Authorizer | null = null;
+      let authorizer: aws.apigateway.Authorizer | null = this.globalAuthorizer ?? null;
       if (route.authorizer) {
-        authorizer = new aws.apigateway.Authorizer(
-          `${name}-Authorizer-${index}`,
-          {
-            name: `${name}-authorizer-${index}`,
-            restApi: this.apiGateway.id,
-            authorizerUri: route.authorizer.invokeArn,
-            authorizerCredentials: route.execRole?.arn,
-            type: "REQUEST",
-            identitySource: "method.request.header.Authorization",
-          },
-          { parent: this },
-        );
-        this.authorizers.push(authorizer);
-
-        // Permission for authorizer
-        const authorizerPermission = new aws.lambda.Permission(
-          `${name}-AuthPermission-${index}`,
-          {
-            action: "lambda:InvokeFunction",
-            function: route.authorizer.name,
-            principal: "apigateway.amazonaws.com",
-            sourceArn: pulumi.interpolate`${this.apiGateway.executionArn}/*`,
-          },
-          { parent: this },
-        );
-        this.permissions.push(authorizerPermission);
+        const { apiAuthorizer } = this.CreateAuthorizer(name, index.toString(), route.authorizer)
+        authorizer = apiAuthorizer;
       }
 
       // Create method
@@ -434,10 +229,6 @@ export class RestApiGateway extends pulumi.ComponentResource {
     );
     }
 
-    if (args.corsConfig) {
-      throw "cors not implemented"
-    }
-
     this.registerOutputs({
       apiGateway: this.apiGateway,
       deployment: this.deployment,
@@ -450,5 +241,35 @@ export class RestApiGateway extends pulumi.ComponentResource {
       certificate: this.certificate,
       basePathMapping: this.basePathMapping,
     });
+  }
+
+  private CreateAuthorizer(namePre: string, namePost: string, authorizerFn: aws.lambda.Function) {
+        const apiAuthorizer = new aws.apigateway.Authorizer(
+          `${namePre}-Authorizer-${namePost}`,
+          {
+            name: `${namePre}-authorizer-${namePost}`,
+            restApi: this.apiGateway.id,
+            authorizerUri: authorizerFn.invokeArn,
+            type: "REQUEST",
+            identitySource: "method.request.header.Authorization",
+          },
+          { parent: this },
+        );
+        this.authorizers.push(apiAuthorizer);
+
+        // Permission for authorizer
+        const authorizerPermission = new aws.lambda.Permission(
+          `${namePre}-AuthPermission-${namePost}`,
+          {
+            action: "lambda:InvokeFunction",
+            function: authorizerFn.name,
+            principal: "apigateway.amazonaws.com",
+            sourceArn: pulumi.interpolate`${this.apiGateway.executionArn}/*`,
+          },
+          { parent: this },
+        );
+        this.permissions.push(authorizerPermission);
+
+        return { apiAuthorizer, authorizerPermission };
   }
 }
