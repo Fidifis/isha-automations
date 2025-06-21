@@ -1,6 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import { Input } from "@pulumi/pulumi";
+import { createHash } from "crypto";
 
 export interface ApiGatewayRoute {
   path: Input<string>;
@@ -85,7 +86,9 @@ export default class RestApiGateway extends pulumi.ComponentResource {
     });
 
     let methods: aws.apigateway.Method[] = [];
+    let methodsResp: aws.apigateway.MethodResponse[] = [];
     let integrations: aws.apigateway.Integration[] = [];
+    let integrationsResp: aws.apigateway.IntegrationResponse[] = [];
 
     let madeResources = new Map<string, pulumi.Output<string>>();
     args.routes.forEach((route, index) => {
@@ -149,7 +152,7 @@ export default class RestApiGateway extends pulumi.ComponentResource {
       );
       methods.push(apiMethod);
 
-      const methodResponse = new aws.apigateway.MethodResponse(
+      const methodResp = new aws.apigateway.MethodResponse(
         `${name}-MethodResp-${index}`,
         {
           restApi: this.apiGateway,
@@ -159,6 +162,7 @@ export default class RestApiGateway extends pulumi.ComponentResource {
         },
         { parent: this },
       );
+      methodsResp.push(methodResp);
 
       // Create integration
       const integrationConfig =
@@ -186,23 +190,24 @@ export default class RestApiGateway extends pulumi.ComponentResource {
         {
           restApi: this.apiGateway.id,
           resourceId: currentResource,
-          httpMethod: methodResponse.httpMethod,
+          httpMethod: methodResp.httpMethod,
           ...integrationConfig,
         },
         { parent: this },
       );
       integrations.push(integration);
 
-      new aws.apigateway.IntegrationResponse(
+      const integrationResp = new aws.apigateway.IntegrationResponse(
         `${name}-IntegrationResp-${index}`,
         {
           restApi: this.apiGateway.id,
           resourceId: currentResource,
           httpMethod: integration.httpMethod, // NOTE: All the dependencies here and around, are to create good dependency tree for correct deploy order.
-          statusCode: methodResponse.statusCode,
+          statusCode: methodResp.statusCode,
         },
         { parent: this },
       );
+      integrationsResp.push(integrationResp);
 
       if (route.eventHandler instanceof aws.lambda.Function) {
         new aws.lambda.Permission(
@@ -223,10 +228,35 @@ export default class RestApiGateway extends pulumi.ComponentResource {
       {
         restApi: this.apiGateway.id,
         description: "Deployment for REST API",
+        // triggers: {
+        //   argumentsHash: pulumi
+        //     .jsonStringify(
+        //       args.routes.map((route) => {
+        //         let eventHandlerArn = route.eventHandler.arn; // eventHandler makes circular dependency because pulumi resources has a parent refernece. Thus extracting the arn
+        //         let authorizerArn = route.authorizer?.arn;
+        //         return {
+        //           path: route.path,
+        //           method: route.method,
+        //           eventHandler: eventHandlerArn,
+        //           stateMachineStartSync: route.stateMachineStartSync,
+        //           execRole: route.execRole,
+        //           authorizer: authorizerArn,
+        //         };
+        //       }),
+        //     )
+        //     .apply((jsonArgs) => {
+        //       return createHash("sha1").update(jsonArgs).digest("hex");
+        //     }),
+        // },
       },
       {
         parent: this,
-        dependsOn: [...methods, ...integrations],
+        dependsOn: [
+          ...methods,
+          ...methodsResp,
+          ...integrations,
+          ...integrationsResp,
+        ],
       },
     );
 
