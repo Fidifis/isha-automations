@@ -52,6 +52,8 @@ export default class RestApiGateway extends pulumi.ComponentResource {
   ) {
     super("fidifis:aws:RestApiGateway", name, {}, opts);
 
+    const deplotmentVersion = 250621
+
     this.apiGateway = new aws.apigateway.RestApi(
       name,
       {
@@ -176,6 +178,7 @@ export default class RestApiGateway extends pulumi.ComponentResource {
                 "application/json": pulumi.jsonStringify({
                   input: "$util.escapeJavaScript($input.json('$'))",
                   stateMachineArn: route.eventHandler.arn,
+                  traceHeader: "$method.request.header.X-Amzn-Trace-Id",
                 }),
               },
             }
@@ -230,8 +233,8 @@ export default class RestApiGateway extends pulumi.ComponentResource {
         description: "Deployment for REST API",
         triggers: {
           argumentsHash: pulumi
-            .jsonStringify(
-              args.routes.map((route) => {
+            .jsonStringify({ version: deplotmentVersion,
+              routes: args.routes.map((route) => {
                 return {
                   path: route.path,
                   method: route.method,
@@ -241,7 +244,7 @@ export default class RestApiGateway extends pulumi.ComponentResource {
                   authorizer: route.authorizer?.arn,
                 };
               }),
-            )
+            })
             .apply((jsonArgs) => {
               return createHash("sha1").update(jsonArgs).digest("hex");
             }),
