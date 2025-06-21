@@ -19,6 +19,7 @@ export interface ApiGatewayProps {
   routes: ApiGatewayRoute[];
   domain?: Input<string>;
   edge?: Input<boolean>;
+  xray?: Input<boolean>;
   corsConfig?: {
     allowOrigins: Input<Input<string>[]>;
     allowMethods: Input<Input<string>[]>;
@@ -240,6 +241,7 @@ export class RestApiGateway extends pulumi.ComponentResource {
         tags: args.tags,
         endpointConfiguration: {
           types: args.edge ? "EDGE" : "REGIONAL",
+          ipAddressType: "dualstack",
         },
       },
       { parent: this },
@@ -389,6 +391,7 @@ export class RestApiGateway extends pulumi.ComponentResource {
         deployment: this.deployment.id,
         stageName: args.stage?.name ?? "api",
         tags: args.tags,
+        xrayTracingEnabled: args.xray,
       },
       { parent: this },
     );
@@ -413,6 +416,7 @@ export class RestApiGateway extends pulumi.ComponentResource {
         certificateArn: args.edge ? this.certificate.arn : undefined,
         endpointConfiguration: {
           types: args.edge ? "EDGE" : "REGIONAL",
+          ipAddressType: "dualstack",
         },
         tags: args.tags,
       },
