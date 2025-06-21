@@ -217,6 +217,16 @@ export default class RestApiGateway extends pulumi.ComponentResource {
       );
       this.methods.push(apiMethod);
 
+      const methodResponse = new aws.apigateway.MethodResponse(
+        `${name}-MethodResp-${index}`,
+        {
+          restApi: this.apiGateway,
+          resourceId: currentResource,
+          httpMethod: method,
+          statusCode: "200",
+        },
+      );
+
       // Create integration
       const integrationConfig =
         route.eventHandler instanceof aws.sfn.StateMachine
@@ -249,6 +259,16 @@ export default class RestApiGateway extends pulumi.ComponentResource {
         { parent: this },
       );
       this.integrations.push(integration);
+
+      new aws.apigateway.IntegrationResponse(
+        `${name}-IntegrationResp-${index}`,
+        {
+          restApi: this.apiGateway.id,
+          resourceId: currentResource,
+          httpMethod: method,
+          statusCode: methodResponse.statusCode,
+        },
+      );
 
       if (route.eventHandler instanceof aws.lambda.Function) {
         const permission = new aws.lambda.Permission(
