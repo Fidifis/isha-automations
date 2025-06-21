@@ -333,7 +333,7 @@ export default class VideoRender extends pulumi.ComponentResource {
         tags: args.meta.tags,
         roleArn: stateRole.arn,
         tracingConfiguration: {
-          enabled: true,
+          enabled: xray,
         },
         definition: pulumi.jsonStringify({
           Comment: "A description of my state machine",

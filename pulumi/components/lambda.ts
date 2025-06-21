@@ -57,6 +57,7 @@ export interface GoLambdaProps {
   };
   name?: string;
   handler?: Input<string>;
+  runtime?: aws.lambda.Runtime;
   timeout?: Input<number>;
   memory?: Input<number>;
   architecture?: Arch;
@@ -169,7 +170,7 @@ export class GoLambda extends pulumi.ComponentResource {
         role: this.role.arn,
         reservedConcurrentExecutions: args.reservedConcurrency,
         handler: args.handler ?? "bootstrap",
-        runtime: aws.lambda.Runtime.CustomAL2023,
+        runtime: args.runtime ?? aws.lambda.Runtime.CustomAL2023,
         timeout: args.timeout,
         memorySize: args.memory,
         architectures: args.architecture ? [args.architecture] : undefined,

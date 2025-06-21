@@ -24,6 +24,8 @@ export class DMQs extends pulumi.ComponentResource {
   ) {
     super("project:components:DMQ", name, {}, opts);
 
+    const xray = true;
+
     const procBcktPolicy = new aws.iam.Policy(
       `${name}-s3Policy`,
       {
@@ -56,9 +58,23 @@ export class DMQs extends pulumi.ComponentResource {
       { parent: this },
     );
 
-    const makerLambda = new DmqMakerLambda(
+    const makerLambda = new GoLambda(
       `${name}-MakerLambda`,
-      { codeBucket: args.codeBucket, tags: args.meta.tags },
+      {
+        tags: args.meta.tags,
+        source: {
+          s3Bucket: args.codeBucket,
+          s3Key: "dmq-maker.zip",
+        },
+        handler: "Lambda",
+        runtime: aws.lambda.Runtime.Dotnet8,
+        architecture: Arch.x86,
+        timeout: 30,
+        memory: 512,
+        reservedConcurrency: 5,
+        logs: { retention: 30 },
+        xray,
+      },
       { parent: this },
     );
 
@@ -76,6 +92,7 @@ export class DMQs extends pulumi.ComponentResource {
         timeout: 60,
         memory: 128,
         logs: { retention: 30 },
+        xray,
         env: {
           variables: {
             SSM_GCP_CONFIG: args.gcpConfigParam.name,
@@ -133,6 +150,15 @@ export class DMQs extends pulumi.ComponentResource {
                       pulumi.interpolate`arn:aws:lambda:${args.meta.region}:${args.meta.accountId}:function:${pulumi.getProject()}-${pulumi.getStack()}-*`,
                     ],
                   },
+                  {
+                    actions: [
+                      "xray:PutTelemetryRecords",
+                      "xray:PutTraceSegments",
+                      "xray:GetSamplingRules",
+                      "xray:GetSamplingTargets",
+                    ],
+                    resources: ["*"],
+                  },
                 ],
               },
               { parent: this },
@@ -143,166 +169,167 @@ export class DMQs extends pulumi.ComponentResource {
       { parent: this },
     );
 
-    const stateMachine = new aws.sfn.StateMachine(`${name}`, {
-      tags: args.meta.tags,
-      roleArn: stateRole.arn,
-      definition: pulumi.jsonStringify({
-        Comment: "A description of my state machine",
-        StartAt: "jobID",
-        QueryLanguage: "JSONata",
-        States: {
-          jobID: {
-            Type: "Task",
-            Resource: "arn:aws:states:::lambda:invoke",
-            Output: "{% $states.input %}",
-            Retry: [
-              {
-                ErrorEquals: ["Lambda.TooManyRequestsException"],
-                IntervalSeconds: 1,
-                MaxAttempts: 3,
-                BackoffRate: 2,
-                JitterStrategy: "FULL",
+    const stateMachine = new aws.sfn.StateMachine(
+      `${name}`,
+      {
+        tags: args.meta.tags,
+        roleArn: stateRole.arn,
+        tracingConfiguration: {
+          enabled: xray,
+        },
+        definition: pulumi.jsonStringify({
+          Comment: "A description of my state machine",
+          StartAt: "jobID",
+          QueryLanguage: "JSONata",
+          States: {
+            jobID: {
+              Type: "Task",
+              Resource: "arn:aws:states:::lambda:invoke",
+              Output: "{% $states.input %}",
+              Retry: [
+                {
+                  ErrorEquals: ["Lambda.TooManyRequestsException"],
+                  IntervalSeconds: 1,
+                  MaxAttempts: 3,
+                  BackoffRate: 2,
+                  JitterStrategy: "FULL",
+                },
+              ],
+              Assign: {
+                jobId: "{% $states.result.Payload.result %}",
               },
-            ],
-            Assign: {
-              jobId: "{% $states.result.Payload.result %}",
+              Arguments: {
+                FunctionName: pulumi.interpolate`${args.rng.arn}:$LATEST`,
+                Payload: {
+                  length: 5,
+                },
+              },
+              Next: "Copy in",
             },
-            Arguments: {
-              FunctionName: pulumi.interpolate`${args.rng.arn}:$LATEST`,
-              Payload: {
-                length: 5,
+            "Copy in": {
+              Type: "Task",
+              Resource: "arn:aws:states:::lambda:invoke",
+              Output: "{% $states.input %}",
+              Arguments: {
+                FunctionName: pulumi.interpolate`${copyPhotoLambda.lambda.arn}:$LATEST`,
+                Payload: {
+                  jobId: "$jobId",
+                  direction: "driveToS3",
+                  driveFolderId: "{% $states.input.sourceDriveFolderId %}",
+                  driveId: "{% $states.input.sourceDriveId %}",
+                  s3Bucket: args.procFilesBucket.id,
+                  s3Key: "{% 'dmq/' & $jobId & '/request' %}",
+                  date: "{% $states.input.date %}",
+                },
+              },
+              Retry: [
+                {
+                  ErrorEquals: ["Lambda.TooManyRequestsException"],
+                  IntervalSeconds: 1,
+                  MaxAttempts: 3,
+                  BackoffRate: 2,
+                  JitterStrategy: "FULL",
+                },
+              ],
+              Next: "Inject fonts map",
+              Assign: {
+                input: "{% $states.input %}",
               },
             },
-            Next: "Copy in",
-          },
-          "Copy in": {
-            Type: "Task",
-            Resource: "arn:aws:states:::lambda:invoke",
-            Output: "{% $states.input %}",
-            Arguments: {
-              FunctionName: pulumi.interpolate`${copyPhotoLambda.lambda.arn}:$LATEST`,
-              Payload: {
-                jobId: "$jobId",
-                direction: "driveToS3",
-                driveFolderId: "{% $states.input.sourceDriveFolderId %}",
-                driveId: "{% $states.input.sourceDriveId %}",
-                s3Bucket: args.procFilesBucket.id,
-                s3Key: "{% 'dmq/' & $jobId & '/request' %}",
-                date: "{% $states.input.date %}",
-              },
-            },
-            Retry: [
-              {
-                ErrorEquals: [
-                  "Lambda.TooManyRequestsException",
-                ],
-                IntervalSeconds: 1,
-                MaxAttempts: 3,
-                BackoffRate: 2,
-                JitterStrategy: "FULL",
-              },
-            ],
-            Next: "Inject fonts map",
-            Assign: {
-              input: "{% $states.input %}",
-            },
-          },
-          "Inject fonts map": {
-            "Type": "Pass",
-            "Next": "Map",
-            "Output": {
-              fontMap: {
-                "Merriweather Sans": "fonts/merriweather_sans.ttf",
-                "Open Sans": "fonts/open_sans_bold.ttf",
-              }
-            }
-          },
-          Map: {
-            Type: "Map",
-            ItemProcessor: {
-              ProcessorConfig: {
-                Mode: "INLINE",
-              },
-              StartAt: "MakeDmq",
-              States: {
-                MakeDmq: {
-                  Type: "Task",
-                  Resource: "arn:aws:states:::lambda:invoke",
-                  Output: "{% $states.result.Payload %}",
-                  Arguments: {
-                    FunctionName: pulumi.interpolate`${makerLambda.lambda.arn}:$LATEST`,
-                    Payload: {
-                      jobId: "{% $jobId %}",
-                      text: "{% $input.text %}",
-                      resolution: "{% $states.input.resolution %}",
-                      s3Bucket: args.procFilesBucket.id,
-                      s3Key: "{% 'dmq/' & $jobId & '/request' %}",
-                      resultS3Key:
-                        "{% 'dmq/' & $jobId & '/result-' & $states.input.suffix & '.png' %}",
-                      fontS3Bucket: args.assetsBucket.id,
-                      fontS3Key: "{% $states.input.font %}",
-                    },
-                  },
-                  Retry: [
-                    {
-                      ErrorEquals: [
-                        "Lambda.TooManyRequestsException",
-                      ],
-                      IntervalSeconds: 1,
-                      MaxAttempts: 3,
-                      BackoffRate: 2,
-                      JitterStrategy: "FULL",
-                    },
-                  ],
-                  End: true,
+            "Inject fonts map": {
+              Type: "Pass",
+              Next: "Map",
+              Output: {
+                fontMap: {
+                  "Merriweather Sans": "fonts/merriweather_sans.ttf",
+                  "Open Sans": "fonts/open_sans_bold.ttf",
                 },
               },
             },
-            Items: [
-              {
-                resolution: [1080, 1080],
-                suffix: "square",
-                font: "{% $exists($input.font) ? $lookup($states.input.fontMap, $input.font) : null %}",
+            Map: {
+              Type: "Map",
+              ItemProcessor: {
+                ProcessorConfig: {
+                  Mode: "INLINE",
+                },
+                StartAt: "MakeDmq",
+                States: {
+                  MakeDmq: {
+                    Type: "Task",
+                    Resource: "arn:aws:states:::lambda:invoke",
+                    Output: "{% $states.result.Payload %}",
+                    Arguments: {
+                      FunctionName: pulumi.interpolate`${makerLambda.lambda.arn}:$LATEST`,
+                      Payload: {
+                        jobId: "{% $jobId %}",
+                        text: "{% $input.text %}",
+                        resolution: "{% $states.input.resolution %}",
+                        s3Bucket: args.procFilesBucket.id,
+                        s3Key: "{% 'dmq/' & $jobId & '/request' %}",
+                        resultS3Key:
+                          "{% 'dmq/' & $jobId & '/result-' & $states.input.suffix & '.png' %}",
+                        fontS3Bucket: args.assetsBucket.id,
+                        fontS3Key: "{% $states.input.font %}",
+                      },
+                    },
+                    Retry: [
+                      {
+                        ErrorEquals: ["Lambda.TooManyRequestsException"],
+                        IntervalSeconds: 1,
+                        MaxAttempts: 3,
+                        BackoffRate: 2,
+                        JitterStrategy: "FULL",
+                      },
+                    ],
+                    End: true,
+                  },
+                },
               },
-              {
-                resolution: [1080, 1350],
-                suffix: "vertical",
-                font: "{% $exists($input.font) ? $lookup($states.input.fontMap, $input.font) : null %}",
-              },
-            ],
-            Next: "Copy out",
-          },
-          "Copy out": {
-            Type: "Task",
-            Resource: "arn:aws:states:::lambda:invoke",
-            Output: "{% $states.result.Payload %}",
-            Arguments: {
-              FunctionName: pulumi.interpolate`${copyPhotoLambda.lambda.arn}:$LATEST`,
-              Payload: {
-                jobId: "$jobId",
-                direction: "s3ToDrive",
-                driveFolderId: "{% $input.destDriveFolderId %}",
-                s3Bucket: args.procFilesBucket.id,
-                s3Key: "{% 'dmq/' & $jobId & '/result' %}",
-                date: "{% $input.date %}",
-              },
+              Items: [
+                {
+                  resolution: [1080, 1080],
+                  suffix: "square",
+                  font: "{% $exists($input.font) ? $lookup($states.input.fontMap, $input.font) : null %}",
+                },
+                {
+                  resolution: [1080, 1350],
+                  suffix: "vertical",
+                  font: "{% $exists($input.font) ? $lookup($states.input.fontMap, $input.font) : null %}",
+                },
+              ],
+              Next: "Copy out",
             },
-            Retry: [
-              {
-                ErrorEquals: [
-                  "Lambda.TooManyRequestsException",
-                ],
-                IntervalSeconds: 1,
-                MaxAttempts: 3,
-                BackoffRate: 2,
-                JitterStrategy: "FULL",
+            "Copy out": {
+              Type: "Task",
+              Resource: "arn:aws:states:::lambda:invoke",
+              Output: "{% $states.result.Payload %}",
+              Arguments: {
+                FunctionName: pulumi.interpolate`${copyPhotoLambda.lambda.arn}:$LATEST`,
+                Payload: {
+                  jobId: "$jobId",
+                  direction: "s3ToDrive",
+                  driveFolderId: "{% $input.destDriveFolderId %}",
+                  s3Bucket: args.procFilesBucket.id,
+                  s3Key: "{% 'dmq/' & $jobId & '/result' %}",
+                  date: "{% $input.date %}",
+                },
               },
-            ],
-            End: true,
+              Retry: [
+                {
+                  ErrorEquals: ["Lambda.TooManyRequestsException"],
+                  IntervalSeconds: 1,
+                  MaxAttempts: 3,
+                  BackoffRate: 2,
+                  JitterStrategy: "FULL",
+                },
+              ],
+              End: true,
+            },
           },
-        },
-      }),
-    }, {parent: this});
+        }),
+      },
+      { parent: this },
+    );
 
     const apiGwExec = new aws.iam.Role(
       `${name}-ApiGwExec`,
