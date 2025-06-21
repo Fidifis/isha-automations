@@ -228,26 +228,24 @@ export default class RestApiGateway extends pulumi.ComponentResource {
       {
         restApi: this.apiGateway.id,
         description: "Deployment for REST API",
-        // triggers: {
-        //   argumentsHash: pulumi
-        //     .jsonStringify(
-        //       args.routes.map((route) => {
-        //         let eventHandlerArn = route.eventHandler.arn; // eventHandler makes circular dependency because pulumi resources has a parent refernece. Thus extracting the arn
-        //         let authorizerArn = route.authorizer?.arn;
-        //         return {
-        //           path: route.path,
-        //           method: route.method,
-        //           eventHandler: eventHandlerArn,
-        //           stateMachineStartSync: route.stateMachineStartSync,
-        //           execRole: route.execRole,
-        //           authorizer: authorizerArn,
-        //         };
-        //       }),
-        //     )
-        //     .apply((jsonArgs) => {
-        //       return createHash("sha1").update(jsonArgs).digest("hex");
-        //     }),
-        // },
+        triggers: {
+          argumentsHash: pulumi
+            .jsonStringify(
+              args.routes.map((route) => {
+                return {
+                  path: route.path,
+                  method: route.method,
+                  eventHandler: route.eventHandler.arn, // eventHandler makes circular dependency because pulumi resources has a parent refernece. Thus extracting the arn
+                  stateMachineStartSync: route.stateMachineStartSync,
+                  execRole: route.execRole?.arn,
+                  authorizer: route.authorizer?.arn,
+                };
+              }),
+            )
+            .apply((jsonArgs) => {
+              return createHash("sha1").update(jsonArgs).digest("hex");
+            }),
+        },
       },
       {
         parent: this,
