@@ -11,6 +11,18 @@ export interface ApiGatewayRoute {
   authorizer?: aws.lambda.Function;
 }
 
+export interface ApiKey {
+  name: string;
+  customValue?: Input<string>;
+}
+
+export interface UsagePlan {
+  name: string;
+  apiKeys: ApiKey[];
+  throttle?: Input<aws.types.input.apigateway.UsagePlanThrottleSettings>;
+  quota?: Input<aws.types.input.apigateway.UsagePlanQuotaSettings>;
+};
+
 export interface ApiGatewayProps {
   name?: Input<string>;
   tags: aws.Tags;
@@ -24,6 +36,7 @@ export interface ApiGatewayProps {
     autoDeployEnabled?: Input<boolean>;
   };
   authorizer?: aws.lambda.Function;
+  usagePlans?: UsagePlan[];
 }
 
 export default class RestApiGateway extends pulumi.ComponentResource {
@@ -39,6 +52,8 @@ export default class RestApiGateway extends pulumi.ComponentResource {
   public readonly basePathMapping?: aws.apigateway.BasePathMapping;
   public readonly globalAuthorizer?: aws.apigateway.Authorizer;
   public readonly authorizers: aws.apigateway.Authorizer[] = [];
+  public readonly usagePlans: aws.apigateway.UsagePlan[] = [];
+  public readonly apiKeys: aws.apigateway.ApiKey[] = [];
 
   constructor(
     name: string,
@@ -65,6 +80,48 @@ export default class RestApiGateway extends pulumi.ComponentResource {
       const { apiAuthorizer } = this.CreateAuthorizer(name, "global", args.authorizer);
       this.globalAuthorizer = apiAuthorizer;
     }
+
+    let apiKeyActive = false;
+
+      args.usagePlans?.forEach(planProp => {
+        const plan = new aws.apigateway.UsagePlan(
+          `${name}-${planProp.name}`,
+          {
+            tags: args.tags,
+            apiStages: [{
+              apiId: this.apiGateway.id,
+              stage: this.stage.stageName,
+            }],
+            throttleSettings: planProp.throttle,
+            quotaSettings: planProp.quota,
+          },
+          { parent: this },
+        );
+        this.usagePlans.push(plan);
+
+        planProp.apiKeys.forEach(apiKeyProp => {
+          apiKeyActive = true;
+          const apiKey = new aws.apigateway.ApiKey(
+            `${name}-${planProp.name}-${apiKeyProp.name}`,
+            {
+              tags: args.tags,
+              value: apiKeyProp.customValue,
+            },
+            { parent: this },
+          )
+          this.apiKeys.push(apiKey);
+
+          new aws.apigateway.UsagePlanKey(
+            `${name}-${planProp.name}-${apiKeyProp.name}`,
+            {
+              keyId: apiKey.id,
+              usagePlanId: plan.id,
+              keyType: "API_KEY",
+            },
+            { parent: this },
+          )
+        })
+      });
 
     let madeResources = new Map<string, pulumi.Output<string>>();
     args.routes.forEach((route, index) => {
@@ -112,8 +169,9 @@ export default class RestApiGateway extends pulumi.ComponentResource {
           restApi: this.apiGateway.id,
           resourceId: currentResource,
           httpMethod: method,
-          authorization: route.authorizer ? "CUSTOM" : "NONE",
+          authorization: authorizer ? "CUSTOM" : "NONE",
           authorizerId: authorizer?.id,
+          apiKeyRequired: apiKeyActive,
         },
         { parent: this },
       );
@@ -227,6 +285,7 @@ export default class RestApiGateway extends pulumi.ComponentResource {
       },
       { parent: this },
     );
+
     }
 
     this.registerOutputs({
@@ -240,36 +299,38 @@ export default class RestApiGateway extends pulumi.ComponentResource {
       domain: this.domain,
       certificate: this.certificate,
       basePathMapping: this.basePathMapping,
+      usagePlans: this.usagePlans,
+      apiKeys: this.apiKeys,
     });
   }
 
   private CreateAuthorizer(namePre: string, namePost: string, authorizerFn: aws.lambda.Function) {
-        const apiAuthorizer = new aws.apigateway.Authorizer(
-          `${namePre}-Authorizer-${namePost}`,
-          {
-            name: `${namePre}-authorizer-${namePost}`,
-            restApi: this.apiGateway.id,
-            authorizerUri: authorizerFn.invokeArn,
-            type: "REQUEST",
-            identitySource: "method.request.header.Authorization",
-          },
-          { parent: this },
-        );
-        this.authorizers.push(apiAuthorizer);
+    const apiAuthorizer = new aws.apigateway.Authorizer(
+      `${namePre}-Authorizer-${namePost}`,
+      {
+        name: `${namePre}-authorizer-${namePost}`,
+        restApi: this.apiGateway.id,
+        authorizerUri: authorizerFn.invokeArn,
+        type: "REQUEST",
+        identitySource: "method.request.header.Authorization",
+      },
+      { parent: this },
+    );
+    this.authorizers.push(apiAuthorizer);
 
-        // Permission for authorizer
-        const authorizerPermission = new aws.lambda.Permission(
-          `${namePre}-AuthPermission-${namePost}`,
-          {
-            action: "lambda:InvokeFunction",
-            function: authorizerFn.name,
-            principal: "apigateway.amazonaws.com",
-            sourceArn: pulumi.interpolate`${this.apiGateway.executionArn}/*`,
-          },
-          { parent: this },
-        );
-        this.permissions.push(authorizerPermission);
+    // Permission for authorizer
+    const authorizerPermission = new aws.lambda.Permission(
+      `${namePre}-AuthPermission-${namePost}`,
+      {
+        action: "lambda:InvokeFunction",
+        function: authorizerFn.name,
+        principal: "apigateway.amazonaws.com",
+        sourceArn: pulumi.interpolate`${this.apiGateway.executionArn}/*`,
+      },
+      { parent: this },
+    );
+    this.permissions.push(authorizerPermission);
 
-        return { apiAuthorizer, authorizerPermission };
+    return { apiAuthorizer, authorizerPermission };
   }
 }

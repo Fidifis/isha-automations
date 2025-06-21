@@ -3,7 +3,6 @@ import * as aws from "@pulumi/aws";
 import { DMQs } from "./dmqs";
 import ApiAccess from "./apiAccess";
 import RestApiGateway from "./components/apiGateway";
-import ApiGatewayV2 from "./components/apiGatewayV2";
 import VideoRender from "./video-render";
 import CommonRes from "./commonRes";
 import HelperLambda from "./helperLambda";
@@ -68,8 +67,14 @@ async function main() {
 
   new RestApiGateway(`rest-Api`, {
     tags,
-    authorizer: apiAuthorizer,
+    // authorizer: apiAuthorizer,
     domain: domains.api,
+    usagePlans: [{
+      name: "gr-cz",
+      apiKeys: [{
+        name: "prim",
+      }]
+    }],
     routes: [...videoRender.routes, ...dmqs.routes],
   });
 }
