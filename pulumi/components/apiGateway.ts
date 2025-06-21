@@ -43,17 +43,6 @@ export default class RestApiGateway extends pulumi.ComponentResource {
   public readonly apiGateway: aws.apigateway.RestApi;
   public readonly deployment: aws.apigateway.Deployment;
   public readonly stage: aws.apigateway.Stage;
-  public readonly resources: aws.apigateway.Resource[] = [];
-  public readonly methods: aws.apigateway.Method[] = [];
-  public readonly integrations: aws.apigateway.Integration[] = [];
-  public readonly permissions: aws.lambda.Permission[] = [];
-  public readonly domain?: aws.apigateway.DomainName;
-  public readonly certificate?: aws.acm.Certificate;
-  public readonly basePathMapping?: aws.apigateway.BasePathMapping;
-  public readonly globalAuthorizer?: aws.apigateway.Authorizer;
-  public readonly authorizers: aws.apigateway.Authorizer[] = [];
-  public readonly usagePlans: aws.apigateway.UsagePlan[] = [];
-  public readonly apiKeys: aws.apigateway.ApiKey[] = [];
 
   constructor(
     name: string,
@@ -76,83 +65,27 @@ export default class RestApiGateway extends pulumi.ComponentResource {
       { parent: this },
     );
 
+    let globalAuthorizer: aws.apigateway.Authorizer | undefined;
     if (args.authorizer) {
       const { apiAuthorizer } = this.CreateAuthorizer(
         name,
         "global",
         args.authorizer,
       );
-      this.globalAuthorizer = apiAuthorizer;
+      globalAuthorizer = apiAuthorizer;
     }
-
-    this.deployment = new aws.apigateway.Deployment(
-      `${name}-Deployment`,
-      {
-        restApi: this.apiGateway.id,
-        description: "Deployment for REST API",
-      },
-      {
-        parent: this,
-        dependsOn: [...this.methods, ...this.integrations],
-      },
-    );
-
-    // Create stage
-    this.stage = new aws.apigateway.Stage(
-      `${name}-Stage`,
-      {
-        restApi: this.apiGateway.id,
-        deployment: this.deployment.id,
-        stageName: args.stage?.name ?? "api",
-        tags: args.tags,
-        xrayTracingEnabled: args.xray,
-      },
-      { parent: this },
-    );
 
     let apiKeyActive = false;
 
     args.usagePlans?.forEach((planProp) => {
-      const plan = new aws.apigateway.UsagePlan(
-        `${name}-${planProp.name}`,
-        {
-          tags: args.tags,
-          apiStages: [
-            {
-              apiId: this.apiGateway.id,
-              stage: this.stage.stageName,
-            },
-          ],
-          throttleSettings: planProp.throttle,
-          quotaSettings: planProp.quota,
-        },
-        { parent: this },
-      );
-      this.usagePlans.push(plan);
-
-      planProp.apiKeys.forEach((apiKeyProp) => {
+      if (planProp.apiKeys.length != 0) {
         apiKeyActive = true;
-        const apiKey = new aws.apigateway.ApiKey(
-          `${name}-${planProp.name}-${apiKeyProp.name}`,
-          {
-            tags: args.tags,
-            value: apiKeyProp.customValue,
-          },
-          { parent: this },
-        );
-        this.apiKeys.push(apiKey);
-
-        new aws.apigateway.UsagePlanKey(
-          `${name}-${planProp.name}-${apiKeyProp.name}`,
-          {
-            keyId: apiKey.id,
-            usagePlanId: plan.id,
-            keyType: "API_KEY",
-          },
-          { parent: this },
-        );
-      });
+        return;
+      }
     });
+
+    let methods: aws.apigateway.Method[] = [];
+    let integrations: aws.apigateway.Integration[] = [];
 
     let madeResources = new Map<string, pulumi.Output<string>>();
     args.routes.forEach((route, index) => {
@@ -185,14 +118,13 @@ export default class RestApiGateway extends pulumi.ComponentResource {
           { parent: this },
         );
 
-        this.resources.push(resource);
         currentResource = resource.id;
         madeResources.set(resourcePath, resource.id);
       });
 
       // Create authorizer if needed
       let authorizer: aws.apigateway.Authorizer | null =
-        this.globalAuthorizer ?? null;
+        globalAuthorizer ?? null;
       if (route.authorizer) {
         const { apiAuthorizer } = this.CreateAuthorizer(
           name,
@@ -215,14 +147,14 @@ export default class RestApiGateway extends pulumi.ComponentResource {
         },
         { parent: this },
       );
-      this.methods.push(apiMethod);
+      methods.push(apiMethod);
 
       const methodResponse = new aws.apigateway.MethodResponse(
         `${name}-MethodResp-${index}`,
         {
           restApi: this.apiGateway,
           resourceId: currentResource,
-          httpMethod: method,
+          httpMethod: apiMethod.httpMethod,
           statusCode: "200",
         },
       );
@@ -253,25 +185,25 @@ export default class RestApiGateway extends pulumi.ComponentResource {
         {
           restApi: this.apiGateway.id,
           resourceId: currentResource,
-          httpMethod: apiMethod.httpMethod,
+          httpMethod: methodResponse.httpMethod,
           ...integrationConfig,
         },
         { parent: this },
       );
-      this.integrations.push(integration);
+      integrations.push(integration);
 
       new aws.apigateway.IntegrationResponse(
         `${name}-IntegrationResp-${index}`,
         {
           restApi: this.apiGateway.id,
           resourceId: currentResource,
-          httpMethod: method,
+          httpMethod: integration.httpMethod,// NOTE: All the dependencies here and around, are to create good dependency tree for correct deploy order.
           statusCode: methodResponse.statusCode,
         },
       );
 
       if (route.eventHandler instanceof aws.lambda.Function) {
-        const permission = new aws.lambda.Permission(
+        new aws.lambda.Permission(
           `${name}-Permission-${index}`,
           {
             action: "lambda:InvokeFunction",
@@ -281,13 +213,76 @@ export default class RestApiGateway extends pulumi.ComponentResource {
           },
           { parent: this },
         );
-        this.permissions.push(permission);
       }
+    });
+
+    this.deployment = new aws.apigateway.Deployment(
+      `${name}-Deployment`,
+      {
+        restApi: this.apiGateway.id,
+        description: "Deployment for REST API",
+      },
+      {
+        parent: this,
+        dependsOn: [...methods, ...integrations],
+      },
+    );
+
+    // Create stage
+    this.stage = new aws.apigateway.Stage(
+      `${name}-Stage`,
+      {
+        restApi: this.apiGateway.id,
+        deployment: this.deployment.id,
+        stageName: args.stage?.name ?? "api",
+        tags: args.tags,
+        xrayTracingEnabled: args.xray,
+      },
+      { parent: this },
+    );
+
+    args.usagePlans?.forEach((planProp) => {
+      const plan = new aws.apigateway.UsagePlan(
+        `${name}-${planProp.name}`,
+        {
+          tags: args.tags,
+          apiStages: [
+            {
+              apiId: this.apiGateway.id,
+              stage: this.stage.stageName,
+            },
+          ],
+          throttleSettings: planProp.throttle,
+          quotaSettings: planProp.quota,
+        },
+        { parent: this },
+      );
+
+      planProp.apiKeys.forEach((apiKeyProp) => {
+        const apiKey = new aws.apigateway.ApiKey(
+          `${name}-${planProp.name}-${apiKeyProp.name}`,
+          {
+            tags: args.tags,
+            value: apiKeyProp.customValue,
+          },
+          { parent: this },
+        );
+
+        new aws.apigateway.UsagePlanKey(
+          `${name}-${planProp.name}-${apiKeyProp.name}`,
+          {
+            keyId: apiKey.id,
+            usagePlanId: plan.id,
+            keyType: "API_KEY",
+          },
+          { parent: this },
+        );
+      });
     });
 
     // Handle custom domain if provided
     if (args.domain) {
-      this.certificate = new aws.acm.Certificate(
+      const certificate = new aws.acm.Certificate(
         `${name}-Certificate`,
         {
           domainName: args.domain,
@@ -297,12 +292,12 @@ export default class RestApiGateway extends pulumi.ComponentResource {
         { parent: this },
       );
 
-      this.domain = new aws.apigateway.DomainName(
+      const domain = new aws.apigateway.DomainName(
         `${name}-Domain`,
         {
           domainName: args.domain,
-          regionalCertificateArn: args.edge ? undefined : this.certificate.arn,
-          certificateArn: args.edge ? this.certificate.arn : undefined,
+          regionalCertificateArn: args.edge ? undefined : certificate.arn,
+          certificateArn: args.edge ? certificate.arn : undefined,
           endpointConfiguration: {
             types: args.edge ? "EDGE" : "REGIONAL",
             ipAddressType: "dualstack",
@@ -312,12 +307,12 @@ export default class RestApiGateway extends pulumi.ComponentResource {
         { parent: this },
       );
 
-      this.basePathMapping = new aws.apigateway.BasePathMapping(
+      new aws.apigateway.BasePathMapping(
         `${name}-Mapping`,
         {
           restApi: this.apiGateway.id,
           stageName: this.stage.stageName,
-          domainName: this.domain.domainName,
+          domainName: domain.domainName,
         },
         { parent: this },
       );
@@ -327,15 +322,6 @@ export default class RestApiGateway extends pulumi.ComponentResource {
       apiGateway: this.apiGateway,
       deployment: this.deployment,
       stage: this.stage,
-      resources: this.resources,
-      methods: this.methods,
-      integrations: this.integrations,
-      permissions: this.permissions,
-      domain: this.domain,
-      certificate: this.certificate,
-      basePathMapping: this.basePathMapping,
-      usagePlans: this.usagePlans,
-      apiKeys: this.apiKeys,
     });
   }
 
@@ -355,7 +341,6 @@ export default class RestApiGateway extends pulumi.ComponentResource {
       },
       { parent: this },
     );
-    this.authorizers.push(apiAuthorizer);
 
     // Permission for authorizer
     const authorizerPermission = new aws.lambda.Permission(
@@ -368,7 +353,6 @@ export default class RestApiGateway extends pulumi.ComponentResource {
       },
       { parent: this },
     );
-    this.permissions.push(authorizerPermission);
 
     return { apiAuthorizer, authorizerPermission };
   }
