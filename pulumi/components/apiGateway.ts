@@ -226,10 +226,10 @@ export default class RestApiGateway extends pulumi.ComponentResource {
               uri: pulumi.interpolate`arn:aws:apigateway:${aws.getRegionOutput().name}:states:action/${route.stateMachineStartSync ? "StartSyncExecution" : "StartExecution"}`,
               credentials: route.execRole?.arn,
               requestTemplates: {
-                "application/json": pulumi.interpolate`{
-                "input": "$util.escapeJavaScript($input.json('$'))",
-                "stateMachineArn": "${route.eventHandler.arn}"
-              }`,
+                "application/json": pulumi.jsonStringify({
+                  input: "$util.escapeJavaScript($input.json('$'))",
+                  stateMachineArn: route.eventHandler.arn,
+                }),
               },
             }
           : {
