@@ -78,7 +78,7 @@ async function main() {
           rateLimit: 1,
         },
         quota: {
-          limit: 30,
+          limit: 50,
           period: "DAY",
         },
         apiKeys: [
