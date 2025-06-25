@@ -49,8 +49,7 @@ export default class HelperLambda extends pulumi.ComponentResource {
       {
         tags: args.meta.tags,
         source: {
-          s3Bucket: args.codeBucket,
-          s3Key: "s3-gdrive-transfer.zip",
+          code: "../bin/s3-gdrive-transfer.zip",
           hash: HashFolder("../code/s3-gdrive-transfer/"),
         },
         architecture: Arch.arm,
@@ -58,6 +57,7 @@ export default class HelperLambda extends pulumi.ComponentResource {
         timeout: 300,
         memory: 256,
         ephemeralStorage: 10240,
+        xray: true,
         logs: { retention: 30 },
         env: {
           variables: {

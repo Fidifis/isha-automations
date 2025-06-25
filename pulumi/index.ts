@@ -12,6 +12,19 @@ interface ConfigDomains {
   api: string;
 }
 
+const apiUsers = ["gr-cz"]
+
+const usagePlanQuotas = {
+        throttle: {
+          burstLimit: 10,
+          rateLimit: 1,
+        },
+        quota: {
+          limit: 50,
+          period: "DAY",
+        },
+}
+
 async function main() {
   const config = new pulumi.Config();
   const domains = config.requireObject<ConfigDomains>("domains");
@@ -32,13 +45,14 @@ async function main() {
     procFilesBucket,
     gcpConfigParam,
     rngLambda,
+    sparkLambda,
   } = new CommonRes("CommonRes", tags);
 
-  const { apiAuthorizer } = new ApiAccess("ApiAuthorizerPSK", {
-    codeBucket,
-    keys: ["GR/cz"],
-    meta,
-  });
+  // const { apiAuthorizer } = new ApiAccess("ApiAuthorizerPSK", {
+  //   codeBucket,
+  //   keys: ["GR/cz"],
+  //   meta,
+  // });
 
   const helperLambda = new HelperLambda("Helper", {
     meta,
@@ -52,8 +66,8 @@ async function main() {
     codeBucket,
     assetsBucket,
     procFilesBucket,
-    rng: rngLambda.lambda,
     gcpConfigParam,
+    sparkLambda,
   });
   const videoRender = new VideoRender("VideoRender", {
     meta,
@@ -67,27 +81,18 @@ async function main() {
 
   new RestApiGateway(`rest-Api`, {
     tags,
-    // authorizer: apiAuthorizer,
     domain: domains.api,
     xray: true,
-    usagePlans: [
-      {
-        name: "gr-cz",
-        throttle: {
-          burstLimit: 10,
-          rateLimit: 1,
-        },
-        quota: {
-          limit: 50,
-          period: "DAY",
-        },
-        apiKeys: [
-          {
-            name: "prim",
-          },
-        ],
-      },
-    ],
+    usagePlans: apiUsers.map(user => {
+    return {
+      name: user,
+      apiKeys: [ {
+            name: user,
+          } ],
+      ...usagePlanQuotas,
+    }
+  }),
+
     routes: [...videoRender.routes, ...dmqs.routes],
   });
 }

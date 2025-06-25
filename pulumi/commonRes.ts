@@ -2,7 +2,7 @@ import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as fs from "fs";
 import * as utils from "./utils";
-import { Arch, GoLambda } from "./components/lambda";
+import { Arch, GoLambda, HashFolder } from "./components/lambda";
 
 export default class CommonRes extends pulumi.ComponentResource {
   public readonly codeBucket: aws.s3.BucketV2;
@@ -10,6 +10,7 @@ export default class CommonRes extends pulumi.ComponentResource {
   public readonly procFilesBucket: aws.s3.BucketV2;
   public readonly gcpConfigParam: aws.ssm.Parameter;
   public readonly rngLambda: GoLambda;
+  public readonly sparkLambda: GoLambda;
 
   constructor(name: string, tags: aws.Tags, opts?: pulumi.ComponentResourceOptions) {
     super("project:components:CommonRes", name, {}, opts);
@@ -59,11 +60,31 @@ export default class CommonRes extends pulumi.ComponentResource {
       {
         tags,
         source: {
-          s3Bucket: this.codeBucket,
-          s3Key: "rng.zip",
+          code: "../bin/rng.zip",
+          hash: HashFolder("../code/rng/"),
         },
         architecture: Arch.arm,
         logs: { retention: 7 },
+      },
+      { parent: this },
+    );
+
+    this.sparkLambda = new GoLambda(
+      `Spark`,
+      {
+        tags,
+        source: {
+          code: "../bin/spark.zip",
+          hash: HashFolder("../code/s3-gdrive-transfer/"),
+        },
+        architecture: Arch.arm,
+        xray: true,
+        logs: { retention: 30 },
+        env: {
+          variables: {
+            ID_LEN: "8"
+          },
+        },
       },
       { parent: this },
     );
@@ -86,6 +107,7 @@ export default class CommonRes extends pulumi.ComponentResource {
       procFilesBucket: this.procFilesBucket,
       gcpConfigParam: this.gcpConfigParam,
       rngLambda: this.rngLambda,
+      sparkLambda: this.sparkLambda,
     });
   }
 }

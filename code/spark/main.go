@@ -19,6 +19,7 @@ import (
 	"lambdalib/random"
 )
 
+const injectIdKey = "jobId"
 var (
 	log  *zap.SugaredLogger
 	sfnc *sfn.Client
@@ -63,10 +64,13 @@ func HandleRequest(ctx context.Context, event events.APIGatewayProxyRequest) (ev
 	length_s := os.Getenv("ID_LEN")
 	length, err := strconv.Atoi(length_s)
 	if err != nil {
-		log.Fatal("env ID_LEN is not a number")
+		log.Fatal("ID_LEN expected number")
 	}
+	log.Infof("Authored by: ", event.RequestContext.Identity.APIKey)
 
 	randId := makeRandStr(length)
+
+	log.Infof("Generated jobId: ", randId)
 
 	var sfnInput sfn.StartExecutionInput
 	err = json.Unmarshal([]byte(event.Body), &sfnInput)
@@ -74,7 +78,25 @@ func HandleRequest(ctx context.Context, event events.APIGatewayProxyRequest) (ev
 		return events.APIGatewayProxyResponse{}, errors.Join(errors.New("Failed processing StartExecutionInput"), err)
 	}
 
-	result, err := sfnc.StartExecution(ctx, &sfnInput)
+	var realInput map[string]any
+	err = json.Unmarshal([]byte(*sfnInput.Input), &realInput)
+	if err != nil {
+		return events.APIGatewayProxyResponse{}, errors.Join(errors.New("Failed decode input data"), err)
+	}
+
+	realInput[injectIdKey] = randId
+
+	encodedInput, err := json.Marshal(realInput)
+	if err != nil {
+		return events.APIGatewayProxyResponse{}, errors.Join(errors.New("Failed encode input data"), err)
+	}
+	encodedInput_s := string(encodedInput)
+
+	result, err := sfnc.StartExecution(ctx, &sfn.StartExecutionInput{
+		Input: &encodedInput_s,
+		StateMachineArn: sfnInput.StateMachineArn,
+		TraceHeader: sfnInput.TraceHeader,
+	})
 	if err != nil {
 		return events.APIGatewayProxyResponse{}, errors.Join(errors.New("Failed to Start Execution"), err)
 	}

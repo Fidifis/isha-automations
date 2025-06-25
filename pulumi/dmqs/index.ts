@@ -1,6 +1,5 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
-import { DmqMakerLambda } from "./makerLambda";
 import { ApiGatewayRoute } from "../components/apiGateway";
 import { Arch, GoLambda, HashFolder } from "../components/lambda";
 import { MetaProps } from "../utils";
@@ -11,7 +10,7 @@ export interface DMQsProps {
   procFilesBucket: aws.s3.BucketV2;
   assetsBucket: aws.s3.BucketV2;
   gcpConfigParam: aws.ssm.Parameter;
-  rng: aws.lambda.Function;
+  sparkLambda: GoLambda;
 }
 
 export class DMQs extends pulumi.ComponentResource {
@@ -179,33 +178,9 @@ export class DMQs extends pulumi.ComponentResource {
         },
         definition: pulumi.jsonStringify({
           Comment: "A description of my state machine",
-          StartAt: "jobID",
+          StartAt: "Copy in",
           QueryLanguage: "JSONata",
           States: {
-            jobID: {
-              Type: "Task",
-              Resource: "arn:aws:states:::lambda:invoke",
-              Output: "{% $states.input %}",
-              Retry: [
-                {
-                  ErrorEquals: ["Lambda.TooManyRequestsException"],
-                  IntervalSeconds: 1,
-                  MaxAttempts: 3,
-                  BackoffRate: 2,
-                  JitterStrategy: "FULL",
-                },
-              ],
-              Assign: {
-                jobId: "{% $states.result.Payload.result %}",
-              },
-              Arguments: {
-                FunctionName: pulumi.interpolate`${args.rng.arn}:$LATEST`,
-                Payload: {
-                  length: 5,
-                },
-              },
-              Next: "Copy in",
-            },
             "Copy in": {
               Type: "Task",
               Resource: "arn:aws:states:::lambda:invoke",
@@ -213,7 +188,7 @@ export class DMQs extends pulumi.ComponentResource {
               Arguments: {
                 FunctionName: pulumi.interpolate`${copyPhotoLambda.lambda.arn}:$LATEST`,
                 Payload: {
-                  jobId: "$jobId",
+                  jobId: "$states.input.jobId",
                   direction: "driveToS3",
                   driveFolderId: "{% $states.input.sourceDriveFolderId %}",
                   driveId: "{% $states.input.sourceDriveId %}",
@@ -359,11 +334,13 @@ export class DMQs extends pulumi.ComponentResource {
                 statements: [
                   {
                     actions: [
-                      "states:StartExecution",
-                      "states:StopExecution",
-                      "states:StartSyncExecution",
+                      // "states:StartExecution",
+                      // "states:StopExecution",
+                      // "states:StartSyncExecution",
+                      "lambda:InvokeFunction",
                     ],
-                    resources: [stateMachine.arn],
+                    // resources: [stateMachine.arn],
+                    resources: [args.sparkLambda.lambda.arn],
                   },
                 ],
               },
@@ -379,10 +356,41 @@ export class DMQs extends pulumi.ComponentResource {
       {
         path: "/unstable/v2/dmq/make",
         method: "POST",
-        eventHandler: stateMachine,
+        eventHandler: args.sparkLambda.lambda,
         execRole: apiGwExec,
       },
     ];
+
+    const sparkPolicy = new aws.iam.Policy(
+      `${name}-SparkPolicy`,
+      {
+        policy: aws.iam.getPolicyDocumentOutput(
+          {
+            statements: [
+              {
+                actions: [
+                  "states:StartExecution",
+                  "states:StopExecution",
+                  "states:StartSyncExecution",
+                ],
+                resources: [stateMachine.arn],
+              },
+            ],
+          },
+          { parent: this },
+        ).json,
+      },
+      { parent: this },
+    );
+
+    new aws.iam.PolicyAttachment(
+      `${name}-SparkPolicy`,
+      {
+        roles: [args.sparkLambda.role],
+        policyArn: sparkPolicy.arn,
+      },
+      { parent: this },
+    );
 
     this.registerOutputs({
       routes: this.routes,
