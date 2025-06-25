@@ -10,6 +10,9 @@ export interface ApiGatewayRoute {
   stateMachineStartSync?: Input<boolean>;
   execRole?: aws.iam.Role;
   authorizer?: aws.lambda.Function;
+  requestTemplate?: {
+    "application/json": pulumi.Output<string>;
+  }
 }
 
 export interface ApiKey {
@@ -174,7 +177,7 @@ export default class RestApiGateway extends pulumi.ComponentResource {
               integrationHttpMethod: "POST",
               uri: pulumi.interpolate`arn:aws:apigateway:${aws.getRegionOutput().name}:states:action/${route.stateMachineStartSync ? "StartSyncExecution" : "StartExecution"}`,
               credentials: route.execRole?.arn,
-              requestTemplates: {
+              requestTemplates: route.requestTemplate ?? {
                 "application/json": pulumi.jsonStringify({
                   input: "$util.escapeJavaScript($input.json('$'))",
                   stateMachineArn: route.eventHandler.arn,
@@ -186,6 +189,7 @@ export default class RestApiGateway extends pulumi.ComponentResource {
               type: "AWS_PROXY",
               integrationHttpMethod: "POST",
               uri: route.eventHandler.invokeArn,
+              requestTemplate: route.requestTemplate,
             };
 
       const integration = new aws.apigateway.Integration(

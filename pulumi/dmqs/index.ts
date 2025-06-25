@@ -358,6 +358,13 @@ export class DMQs extends pulumi.ComponentResource {
         method: "POST",
         eventHandler: args.sparkLambda.lambda,
         execRole: apiGwExec,
+        requestTemplate: {
+          "application/json": pulumi.jsonStringify({
+            input: "$util.escapeJavaScript($input.json('$'))",
+            stateMachineArn: stateMachine.arn,
+            traceHeader: "$method.request.header.X-Amzn-Trace-Id",
+          }),
+        },
       },
     ];
 
