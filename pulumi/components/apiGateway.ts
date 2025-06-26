@@ -218,6 +218,54 @@ export default class RestApiGateway extends pulumi.ComponentResource {
         { parent: this },
       );
       integrationsResp.push(integrationResp);
+      if (route.requestTemplate) {
+        const methodResp400 = new aws.apigateway.MethodResponse(
+          `${name}-MethodResp400-${index}`,
+          {
+            restApi: this.apiGateway,
+            resourceId: currentResource,
+            httpMethod: apiMethod.httpMethod,
+            statusCode: "400",
+          },
+          { parent: this },
+        );
+        methodsResp.push(methodResp400);
+        const integrationResp400 = new aws.apigateway.IntegrationResponse(
+          `${name}-IntegrationResp400-${index}`,
+          {
+            restApi: this.apiGateway.id,
+            resourceId: currentResource,
+            httpMethod: integration.httpMethod,
+            statusCode: methodResp400.statusCode,
+            selectionPattern: "\"statusCode\":\\s*400"
+          },
+          { parent: this },
+        );
+        integrationsResp.push(integrationResp400);
+        const methodResp500 = new aws.apigateway.MethodResponse(
+          `${name}-MethodResp500-${index}`,
+          {
+            restApi: this.apiGateway,
+            resourceId: currentResource,
+            httpMethod: apiMethod.httpMethod,
+            statusCode: "500",
+          },
+          { parent: this },
+        );
+        methodsResp.push(methodResp500);
+        const integrationResp500 = new aws.apigateway.IntegrationResponse(
+          `${name}-IntegrationResp500-${index}`,
+          {
+            restApi: this.apiGateway.id,
+            resourceId: currentResource,
+            httpMethod: integration.httpMethod,
+            statusCode: methodResp400.statusCode,
+            selectionPattern: ".*errorMessage.*"
+          },
+          { parent: this },
+        );
+        integrationsResp.push(integrationResp500);
+      }
 
       if (route.eventHandler instanceof aws.lambda.Function) {
         new aws.lambda.Permission(
