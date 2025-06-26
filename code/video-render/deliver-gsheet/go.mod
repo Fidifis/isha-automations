@@ -5,7 +5,7 @@ go 1.24.2
 replace lambdalib => ../../lib
 
 require (
-	github.com/aws/aws-lambda-go v1.48.0
+	github.com/aws/aws-lambda-go v1.49.0
 	github.com/aws/aws-sdk-go-v2 v1.36.3
 	go.uber.org/zap v1.27.0
 	google.golang.org/api v0.231.0
