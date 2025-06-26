@@ -235,7 +235,7 @@ export class DMQs extends pulumi.ComponentResource {
                     Arguments: {
                       FunctionName: pulumi.interpolate`${makerLambda.lambda.arn}:$LATEST`,
                       Payload: {
-                        jobId: "{% $jobId %}",
+                        jobId: "{% $input.jobId %}",
                         text: "{% $input.text %}",
                         resolution: "{% $states.input.resolution %}",
                         s3Bucket: args.procFilesBucket.id,
@@ -280,7 +280,7 @@ export class DMQs extends pulumi.ComponentResource {
               Arguments: {
                 FunctionName: pulumi.interpolate`${copyPhotoLambda.lambda.arn}:$LATEST`,
                 Payload: {
-                  jobId: "$jobId",
+                  jobId: "$input.jobId",
                   direction: "s3ToDrive",
                   driveFolderId: "{% $input.destDriveFolderId %}",
                   s3Bucket: args.procFilesBucket.id,
