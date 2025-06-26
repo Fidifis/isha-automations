@@ -200,6 +200,7 @@ export default class RestApiGateway extends pulumi.ComponentResource {
           resourceId: currentResource,
           httpMethod: methodResp.httpMethod,
           passthroughBehavior: "WHEN_NO_TEMPLATES",
+          // contentHandling: "CONVERT_TO_TEXT",
           ...integrationConfig,
         },
         { parent: this },
@@ -248,6 +249,7 @@ export default class RestApiGateway extends pulumi.ComponentResource {
                   stateMachineStartSync: route.stateMachineStartSync,
                   execRole: route.execRole?.arn,
                   authorizer: route.authorizer?.arn,
+                  requestTemplate: route.requestTemplate,
                 };
               }),
             })

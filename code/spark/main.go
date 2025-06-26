@@ -25,6 +25,13 @@ var (
 	sfnc *sfn.Client
 )
 
+type Request struct {
+	APIKeyID string `json:"apiKeyId"`
+	SfnArn string `json:"stateMachineArn"`
+	Input string `json:"input"`
+	TraceHeader string `json:"traceHeader"`
+}
+
 type ResponseBody struct {
 	JobId string `json:"jobId"`
 }
@@ -60,48 +67,48 @@ func makeRandStr(length int) string {
 	return string(b)
 }
 
-func HandleRequest(ctx context.Context, event events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+func HandleRequest(ctx context.Context, event Request) (events.APIGatewayProxyResponse, error) {
+	debu, err := json.Marshal(event)
+	log.Debug(string(debu))
+
 	length_s := os.Getenv("ID_LEN")
 	length, err := strconv.Atoi(length_s)
 	if err != nil {
 		log.Fatal("ID_LEN expected number")
 	}
-	log.Infof("Authored by: ", event.RequestContext.Identity.APIKey)
+	log.Info("Authored by key ID: '", event.APIKeyID, "'")
+	if event.APIKeyID == "" {
+		log.Warn("Incoming api key id is empty")
+	}
 
 	randId := makeRandStr(length)
 
-	log.Infof("Generated jobId: ", randId)
-
-	var sfnInput sfn.StartExecutionInput
-	err = json.Unmarshal([]byte(event.Body), &sfnInput)
-	if err != nil {
-		return events.APIGatewayProxyResponse{}, errors.Join(errors.New("Failed processing StartExecutionInput"), err)
-	}
+	log.Info("Generated jobId: ", randId)
 
 	var realInput map[string]any
-	err = json.Unmarshal([]byte(*sfnInput.Input), &realInput)
+	err = json.Unmarshal([]byte(event.Input), &realInput)
 	if err != nil {
-		return events.APIGatewayProxyResponse{}, errors.Join(errors.New("Failed decode input data"), err)
+		return events.APIGatewayProxyResponse{}, errors.Join(errors.New("Failed to decode input data"), err)
 	}
 
 	realInput[injectIdKey] = randId
 
 	encodedInput, err := json.Marshal(realInput)
 	if err != nil {
-		return events.APIGatewayProxyResponse{}, errors.Join(errors.New("Failed encode input data"), err)
+		return events.APIGatewayProxyResponse{}, errors.Join(errors.New("Failed re-encode input data"), err)
 	}
 	encodedInput_s := string(encodedInput)
 
 	result, err := sfnc.StartExecution(ctx, &sfn.StartExecutionInput{
 		Input: &encodedInput_s,
-		StateMachineArn: sfnInput.StateMachineArn,
-		TraceHeader: sfnInput.TraceHeader,
+		StateMachineArn: &event.SfnArn,
+		TraceHeader: &event.TraceHeader,
 	})
 	if err != nil {
 		return events.APIGatewayProxyResponse{}, errors.Join(errors.New("Failed to Start Execution"), err)
 	}
 
-	log.Infof("StepFunctions Execution Arn: ", result.ExecutionArn)
+	log.Info("StepFunctions Execution Arn: ", result.ExecutionArn)
 
 	return apiGwResponse.OkResponse(ResponseBody{
 		JobId: randId,

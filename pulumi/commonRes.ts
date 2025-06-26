@@ -75,7 +75,7 @@ export default class CommonRes extends pulumi.ComponentResource {
         tags,
         source: {
           code: "../bin/spark.zip",
-          hash: HashFolder("../code/s3-gdrive-transfer/"),
+          hash: HashFolder("../code/spark/"),
         },
         architecture: Arch.arm,
         xray: true,
