@@ -186,10 +186,11 @@ export default class RestApiGateway extends pulumi.ComponentResource {
               },
             }
           : {
-              type: "AWS_PROXY",
+              type: route.requestTemplate ? "AWS" : "AWS_PROXY",
               integrationHttpMethod: "POST",
               uri: route.eventHandler.invokeArn,
-              requestTemplate: route.requestTemplate,
+              credentials: route.execRole?.arn,
+              requestTemplates: route.requestTemplate,
             };
 
       const integration = new aws.apigateway.Integration(
@@ -198,6 +199,7 @@ export default class RestApiGateway extends pulumi.ComponentResource {
           restApi: this.apiGateway.id,
           resourceId: currentResource,
           httpMethod: methodResp.httpMethod,
+          passthroughBehavior: "WHEN_NO_TEMPLATES",
           ...integrationConfig,
         },
         { parent: this },
