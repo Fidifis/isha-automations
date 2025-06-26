@@ -12,7 +12,9 @@ export interface ApiGatewayRoute {
   authorizer?: aws.lambda.Function;
   requestTemplate?: {
     "application/json": pulumi.Output<string>;
-  }
+  };
+  errResponseTemplate?: Input<string>;
+  responseTemplate?: Input<string>;
 }
 
 export interface ApiKey {
@@ -55,7 +57,7 @@ export default class RestApiGateway extends pulumi.ComponentResource {
   ) {
     super("fidifis:aws:RestApiGateway", name, {}, opts);
 
-    const deplotmentVersion = 250621
+    const deplotmentVersion = 250621;
 
     this.apiGateway = new aws.apigateway.RestApi(
       name,
@@ -214,6 +216,11 @@ export default class RestApiGateway extends pulumi.ComponentResource {
           resourceId: currentResource,
           httpMethod: integration.httpMethod, // NOTE: All the dependencies here and around, are to create good dependency tree for correct deploy order.
           statusCode: methodResp.statusCode,
+          responseTemplates: route.responseTemplate
+            ? {
+                "application/json": route.responseTemplate,
+              }
+            : undefined,
         },
         { parent: this },
       );
@@ -237,7 +244,12 @@ export default class RestApiGateway extends pulumi.ComponentResource {
             resourceId: currentResource,
             httpMethod: integration.httpMethod,
             statusCode: methodResp400.statusCode,
-            selectionPattern: "\"statusCode\":\\s*400"
+            selectionPattern: '"statusCode":\\s*400',
+            responseTemplates: route.errResponseTemplate
+              ? {
+                  "application/json": route.errResponseTemplate,
+                }
+              : undefined,
           },
           { parent: this },
         );
@@ -260,7 +272,7 @@ export default class RestApiGateway extends pulumi.ComponentResource {
             resourceId: currentResource,
             httpMethod: integration.httpMethod,
             statusCode: methodResp500.statusCode,
-            selectionPattern: ".*errorMessage.*"
+            selectionPattern: ".*errorMessage.*",
           },
           { parent: this },
         );
@@ -288,7 +300,8 @@ export default class RestApiGateway extends pulumi.ComponentResource {
         description: "Deployment for REST API",
         triggers: {
           argumentsHash: pulumi
-            .jsonStringify({ version: deplotmentVersion,
+            .jsonStringify({
+              version: deplotmentVersion,
               routes: args.routes.map((route) => {
                 return {
                   path: route.path,
@@ -298,6 +311,8 @@ export default class RestApiGateway extends pulumi.ComponentResource {
                   execRole: route.execRole?.arn,
                   authorizer: route.authorizer?.arn,
                   requestTemplate: route.requestTemplate,
+                  responseTemplate: route.responseTemplate,
+                  errResponseTemplate: route.errResponseTemplate,
                 };
               }),
             })

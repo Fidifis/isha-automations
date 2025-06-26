@@ -359,14 +359,14 @@ export class DMQs extends pulumi.ComponentResource {
         execRole: apiGwExec,
         requestTemplate: {
           "application/json": pulumi.jsonStringify({
-            // input: "$util.escapeJavaScript($input.json('$'))",
-            // body: {
-              input: "$util.escapeJavaScript($input.json('$'))",
-              stateMachineArn: stateMachine.arn,
-            // },
-            // traceHeader: "$method.request.header.X-Amzn-Trace-Id",
+            input: "$util.escapeJavaScript($input.json('$'))",
+            stateMachineArn: stateMachine.arn,
+            traceHeader: "$method.request.header.X-Amzn-Trace-Id",
+            apiKeyId: "$context.identity.apiKeyId",
           }),
         },
+        responseTemplate: '$input.path("$.body")',
+        errResponseTemplate: '$input.path("$.body")',
       },
     ];
 
