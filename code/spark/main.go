@@ -73,6 +73,9 @@ func HandleRequest(ctx context.Context, event Request) (events.APIGatewayProxyRe
 	if err != nil {
 		log.Fatal("ID_LEN expected number")
 	}
+	if length < 1 {
+		log.Fatal("ID_LEN must be > 0")
+	}
 	log.Info("Authored by key ID: '", event.APIKeyID, "'")
 	if event.APIKeyID == "" {
 		log.Warn("Incoming api key id is empty")
