@@ -82,8 +82,7 @@ export class DMQs extends pulumi.ComponentResource {
       {
         tags: args.meta.tags,
         source: {
-          s3Bucket: args.codeBucket,
-          s3Key: "dmq-copy-photo.zip",
+          code: "../bin/dmq-copy-photo.zip",
           hash: HashFolder("../code/dmq/copy-photo/"),
         },
         architecture: Arch.arm,
