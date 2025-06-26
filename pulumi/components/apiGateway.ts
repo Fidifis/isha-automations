@@ -259,7 +259,7 @@ export default class RestApiGateway extends pulumi.ComponentResource {
             restApi: this.apiGateway.id,
             resourceId: currentResource,
             httpMethod: integration.httpMethod,
-            statusCode: methodResp400.statusCode,
+            statusCode: methodResp500.statusCode,
             selectionPattern: ".*errorMessage.*"
           },
           { parent: this },
