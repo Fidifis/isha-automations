@@ -68,9 +68,6 @@ func makeRandStr(length int) string {
 }
 
 func HandleRequest(ctx context.Context, event Request) (events.APIGatewayProxyResponse, error) {
-	debu, err := json.Marshal(event)
-	log.Debug(string(debu))
-
 	length_s := os.Getenv("ID_LEN")
 	length, err := strconv.Atoi(length_s)
 	if err != nil {
