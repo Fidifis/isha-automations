@@ -365,8 +365,6 @@ export class DMQs extends pulumi.ComponentResource {
             apiKeyId: "$context.identity.apiKeyId",
           }),
         },
-        responseTemplate: '$input.path("$.body")',
-        errResponseTemplate: '$input.path("$.body")',
       },
     ];
 

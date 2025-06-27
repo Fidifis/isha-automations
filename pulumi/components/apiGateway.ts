@@ -11,10 +11,8 @@ export interface ApiGatewayRoute {
   execRole?: aws.iam.Role;
   authorizer?: aws.lambda.Function;
   requestTemplate?: {
-    "application/json": pulumi.Output<string>;
+    "application/json": pulumi.Input<string>;
   };
-  errResponseTemplate?: Input<string>;
-  responseTemplate?: Input<string>;
 }
 
 export interface ApiKey {
@@ -145,8 +143,8 @@ export default class RestApiGateway extends pulumi.ComponentResource {
       }
 
       // Create method
-      const apiMethod = new aws.apigateway.Method(
-        `${name}-Method-${index}`,
+      const apiMethod200 = new aws.apigateway.Method(
+        `${name}-Method200-${index}`,
         {
           restApi: this.apiGateway.id,
           resourceId: currentResource,
@@ -157,19 +155,19 @@ export default class RestApiGateway extends pulumi.ComponentResource {
         },
         { parent: this },
       );
-      methods.push(apiMethod);
+      methods.push(apiMethod200);
 
-      const methodResp = new aws.apigateway.MethodResponse(
+      const methodResp200 = new aws.apigateway.MethodResponse(
         `${name}-MethodResp-${index}`,
         {
           restApi: this.apiGateway,
           resourceId: currentResource,
-          httpMethod: apiMethod.httpMethod,
+          httpMethod: apiMethod200.httpMethod,
           statusCode: "200",
         },
         { parent: this },
       );
-      methodsResp.push(methodResp);
+      methodsResp.push(methodResp200);
 
       // Create integration
       const integrationConfig =
@@ -195,43 +193,46 @@ export default class RestApiGateway extends pulumi.ComponentResource {
               requestTemplates: route.requestTemplate,
             };
 
-      const integration = new aws.apigateway.Integration(
-        `${name}-Integration-${index}`,
+      const integration200 = new aws.apigateway.Integration(
+        `${name}-Integration200-${index}`,
         {
           restApi: this.apiGateway.id,
           resourceId: currentResource,
-          httpMethod: methodResp.httpMethod,
+          httpMethod: methodResp200.httpMethod,
           passthroughBehavior: "WHEN_NO_TEMPLATES",
           // contentHandling: "CONVERT_TO_TEXT",
           ...integrationConfig,
         },
         { parent: this },
       );
-      integrations.push(integration);
+      integrations.push(integration200);
 
-      const integrationResp = new aws.apigateway.IntegrationResponse(
-        `${name}-IntegrationResp-${index}`,
+      const integrationResp200 = new aws.apigateway.IntegrationResponse(
+        `${name}-IntegrationResp200-${index}`,
         {
           restApi: this.apiGateway.id,
           resourceId: currentResource,
-          httpMethod: integration.httpMethod, // NOTE: All the dependencies here and around, are to create good dependency tree for correct deploy order.
-          statusCode: methodResp.statusCode,
-          responseTemplates: route.responseTemplate
+          httpMethod: integration200.httpMethod, // NOTE: All the dependencies here and around, are to create good dependency tree for correct deploy order.
+          statusCode: methodResp200.statusCode,
+          // selectionPattern: route.requestTemplate
+          //   ? '"statusCode":\\s*200'
+          //   : undefined,
+          responseTemplates: route.requestTemplate
             ? {
-                "application/json": route.responseTemplate,
+                "application/json": '$input.path("$.body")',
               }
             : undefined,
         },
         { parent: this },
       );
-      integrationsResp.push(integrationResp);
+      integrationsResp.push(integrationResp200);
       if (route.requestTemplate) {
         const methodResp400 = new aws.apigateway.MethodResponse(
           `${name}-MethodResp400-${index}`,
           {
             restApi: this.apiGateway,
             resourceId: currentResource,
-            httpMethod: apiMethod.httpMethod,
+            httpMethod: apiMethod200.httpMethod,
             statusCode: "400",
           },
           { parent: this },
@@ -242,12 +243,12 @@ export default class RestApiGateway extends pulumi.ComponentResource {
           {
             restApi: this.apiGateway.id,
             resourceId: currentResource,
-            httpMethod: integration.httpMethod,
+            httpMethod: integration200.httpMethod,
             statusCode: methodResp400.statusCode,
             selectionPattern: '"statusCode":\\s*400',
-            responseTemplates: route.errResponseTemplate
+            responseTemplates: route.requestTemplate
               ? {
-                  "application/json": route.errResponseTemplate,
+                  "application/json": '$input.path("$.body")',
                 }
               : undefined,
           },
@@ -259,7 +260,7 @@ export default class RestApiGateway extends pulumi.ComponentResource {
           {
             restApi: this.apiGateway,
             resourceId: currentResource,
-            httpMethod: apiMethod.httpMethod,
+            httpMethod: apiMethod200.httpMethod,
             statusCode: "500",
           },
           { parent: this },
@@ -270,9 +271,9 @@ export default class RestApiGateway extends pulumi.ComponentResource {
           {
             restApi: this.apiGateway.id,
             resourceId: currentResource,
-            httpMethod: integration.httpMethod,
+            httpMethod: integration200.httpMethod,
             statusCode: methodResp500.statusCode,
-            selectionPattern: ".*errorMessage.*",
+            selectionPattern: '"statusCode":\\s*500',
           },
           { parent: this },
         );
@@ -311,8 +312,6 @@ export default class RestApiGateway extends pulumi.ComponentResource {
                   execRole: route.execRole?.arn,
                   authorizer: route.authorizer?.arn,
                   requestTemplate: route.requestTemplate,
-                  responseTemplate: route.responseTemplate,
-                  errResponseTemplate: route.errResponseTemplate,
                 };
               }),
             })
