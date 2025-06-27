@@ -214,12 +214,9 @@ export default class RestApiGateway extends pulumi.ComponentResource {
           resourceId: currentResource,
           httpMethod: integration200.httpMethod, // NOTE: All the dependencies here and around, are to create good dependency tree for correct deploy order.
           statusCode: methodResp200.statusCode,
-          // selectionPattern: route.requestTemplate
-          //   ? '"statusCode":\\s*200'
-          //   : undefined,
           responseTemplates: route.requestTemplate
             ? {
-                "application/json": '$input.path("$.body")',
+                "application/json": '$input.path("$.body")\n#set($context.responseOverride.status = $input.path(\'$.statusCode\'))',
               }
             : undefined,
         },
@@ -227,34 +224,6 @@ export default class RestApiGateway extends pulumi.ComponentResource {
       );
       integrationsResp.push(integrationResp200);
       if (route.requestTemplate) {
-        const methodResp400 = new aws.apigateway.MethodResponse(
-          `${name}-MethodResp400-${index}`,
-          {
-            restApi: this.apiGateway,
-            resourceId: currentResource,
-            httpMethod: apiMethod200.httpMethod,
-            statusCode: "400",
-          },
-          { parent: this },
-        );
-        methodsResp.push(methodResp400);
-        const integrationResp400 = new aws.apigateway.IntegrationResponse(
-          `${name}-IntegrationResp400-${index}`,
-          {
-            restApi: this.apiGateway.id,
-            resourceId: currentResource,
-            httpMethod: integration200.httpMethod,
-            statusCode: methodResp400.statusCode,
-            selectionPattern: '"statusCode":\\s*400',
-            responseTemplates: route.requestTemplate
-              ? {
-                  "application/json": '$input.path("$.body")',
-                }
-              : undefined,
-          },
-          { parent: this },
-        );
-        integrationsResp.push(integrationResp400);
         const methodResp500 = new aws.apigateway.MethodResponse(
           `${name}-MethodResp500-${index}`,
           {
@@ -273,7 +242,7 @@ export default class RestApiGateway extends pulumi.ComponentResource {
             resourceId: currentResource,
             httpMethod: integration200.httpMethod,
             statusCode: methodResp500.statusCode,
-            selectionPattern: '"statusCode":\\s*500',
+            selectionPattern: '.+',
           },
           { parent: this },
         );
