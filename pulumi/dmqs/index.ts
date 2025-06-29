@@ -241,7 +241,7 @@ export class DMQs extends pulumi.ComponentResource {
                         s3Bucket: args.procFilesBucket.id,
                         s3Key: "{% 'dmq/' & $input.jobId & '/request' %}",
                         resultS3Key:
-                          "{% 'dmq/' & $jobId & '/result-' & $states.input.suffix & '.png' %}",
+                          "{% 'dmq/' & $input.jobId & '/result-' & $states.input.suffix & '.png' %}",
                         fontS3Bucket: args.assetsBucket.id,
                         fontS3Key: "{% $states.input.font %}",
                       },
