@@ -83,6 +83,7 @@ export default class CommonRes extends pulumi.ComponentResource {
           code: "../bin/rng.zip",
           hash: HashFolder("../code/rng/"),
         },
+        xray: true,
         architecture: Arch.arm,
         logs: { retention: 7 },
       },

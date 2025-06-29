@@ -58,7 +58,6 @@ export default class HelperLambda extends pulumi.ComponentResource {
           hash: HashFolder("../code/s3-gdrive-transfer/"),
         },
         architecture: Arch.arm,
-        reservedConcurrency: 20,
         timeout: 300,
         memory: 256,
         ephemeralStorage: 10240,

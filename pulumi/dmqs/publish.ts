@@ -40,7 +40,6 @@ export function create(parent: pulumi.Resource, name: string, args: DMQsProps) {
         hash: HashFolder("../code/dmq/publish/"),
       },
       architecture: Arch.arm,
-      reservedConcurrency: 20,
       timeout: 60,
       memory: 128,
       logs: { retention: 30 },
