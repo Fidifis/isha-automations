@@ -210,22 +210,19 @@ func HandleRequest(ctx context.Context, event Event) error {
 	log.Infof("direction=%s", event.Direction)
 	switch event.Direction {
 	case "s3ToDrive":
-		ext := ".png"
 		dateStr := fmt.Sprintf("%d-%02d-%02d", event.Date.Year(), int(event.Date.Month()), event.Date.Day())
 
-		vertical := fmt.Sprintf("%s_vertical%s", dateStr, ext)
-		square := fmt.Sprintf("%s_square%s", dateStr, ext)
-		s3Vertical := fmt.Sprintf("%s-vertical%s", event.S3Key, ext)
-		s3Square := fmt.Sprintf("%s-square%s", event.S3Key, ext)
+		keySplit := strings.Split(event.S3Key, "/")
+		fileName := keySplit[len(keySplit) - 1]
+		finalName := strings.Replace(fileName, "result-", "", -1)
 
-		log.Debugf("uploading from bucket=%s key=%s to driveFolder=%s file=%s", event.S3Bucket, s3Vertical, event.DriveFolderId, vertical)
-		err1 := fileTransfer.S3ToDrive(ctx, s3c, driveSvc, event.S3Bucket, s3Vertical, event.DriveFolderId, vertical, "image/png")
+		finalName = fmt.Sprintf("%s_%s", dateStr, finalName)
 
-		log.Debugf("uploading from bucket=%s key=%s to driveFolder=%s file=%s", event.S3Bucket, s3Square, event.DriveFolderId, square)
-		err2 := fileTransfer.S3ToDrive(ctx, s3c, driveSvc, event.S3Bucket, s3Square, event.DriveFolderId, square, "image/png")
+		log.Debugf("uploading from bucket=%s key=%s to driveFolder=%s file=%s", event.S3Bucket, event.S3Key, event.DriveFolderId, finalName)
+		err := fileTransfer.S3ToDrive(ctx, s3c, driveSvc, event.S3Bucket, event.S3Key, event.DriveFolderId, finalName, "image/png")
 
-		if err1 != nil || err2 != nil {
-			return errors.Join(errors.New("Fail upload DMQ"), err1, err2)
+		if err != nil {
+			return errors.Join(errors.New("Fail upload DMQ"), err)
 		}
 
 	case "driveToS3":

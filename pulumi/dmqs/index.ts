@@ -246,6 +246,36 @@ export class DMQs extends pulumi.ComponentResource {
                         fontS3Key: "{% $states.input.font %}",
                       },
                     },
+                    Assign: {
+                      suffix: "{% $states.input.suffix %}",
+                    },
+                    Retry: [
+                      {
+                        ErrorEquals: ["Lambda.TooManyRequestsException"],
+                        IntervalSeconds: 1,
+                        MaxAttempts: 3,
+                        BackoffRate: 2,
+                        JitterStrategy: "FULL",
+                      },
+                    ],
+                    Next: "Copy out",
+                  },
+                  "Copy out": {
+                    Type: "Task",
+                    Resource: "arn:aws:states:::lambda:invoke",
+                    Output: "{% $states.result.Payload %}",
+                    Arguments: {
+                      FunctionName: pulumi.interpolate`${copyPhotoLambda.lambda.arn}:$LATEST`,
+                      Payload: {
+                        jobId: "$input.jobId",
+                        direction: "s3ToDrive",
+                        driveFolderId: "{% $input.destDriveFolderId %}",
+                        s3Bucket: args.procFilesBucket.id,
+                        s3Key:
+                          "{% 'dmq/' & $input.jobId & '/result-' & $suffix & '.png' %}",
+                        date: "{% $input.date %}",
+                      },
+                    },
                     Retry: [
                       {
                         ErrorEquals: ["Lambda.TooManyRequestsException"],
@@ -269,32 +299,6 @@ export class DMQs extends pulumi.ComponentResource {
                   resolution: [1080, 1350],
                   suffix: "vertical",
                   font: "{% $exists($input.font) ? $lookup($states.input.fontMap, $input.font) : null %}",
-                },
-              ],
-              Next: "Copy out",
-            },
-            "Copy out": {
-              Type: "Task",
-              Resource: "arn:aws:states:::lambda:invoke",
-              Output: "{% $states.result.Payload %}",
-              Arguments: {
-                FunctionName: pulumi.interpolate`${copyPhotoLambda.lambda.arn}:$LATEST`,
-                Payload: {
-                  jobId: "$input.jobId",
-                  direction: "s3ToDrive",
-                  driveFolderId: "{% $input.destDriveFolderId %}",
-                  s3Bucket: args.procFilesBucket.id,
-                  s3Key: "{% 'dmq/' & $input.jobId & '/result' %}",
-                  date: "{% $input.date %}",
-                },
-              },
-              Retry: [
-                {
-                  ErrorEquals: ["Lambda.TooManyRequestsException"],
-                  IntervalSeconds: 1,
-                  MaxAttempts: 3,
-                  BackoffRate: 2,
-                  JitterStrategy: "FULL",
                 },
               ],
               End: true,
