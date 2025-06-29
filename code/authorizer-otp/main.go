@@ -26,7 +26,7 @@ type Event struct {
 	Otp   string `json:"otp"`
 }
 type Response struct {
-	Validity bool `json:"validity"`
+	Validity bool `json:"valid"`
 }
 
 func getSSMPath() string {

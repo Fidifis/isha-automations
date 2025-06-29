@@ -3,11 +3,7 @@ import * as aws from "@pulumi/aws";
 import { Arch, GoLambda, HashFolder } from "../components/lambda";
 import { DMQsProps } from "./index";
 
-export function create(
-  parent: pulumi.Resource,
-  name: string,
-  args: DMQsProps,
-) {
+export function create(parent: pulumi.Resource, name: string, args: DMQsProps) {
   const xray = true;
 
   const procBcktPolicy = new aws.iam.Policy(
@@ -50,8 +46,7 @@ export function create(
       logs: { retention: 30 },
       xray,
       env: {
-        variables: {
-        },
+        variables: {},
       },
     },
     { parent },
@@ -148,10 +143,25 @@ export function create(
                 JitterStrategy: "FULL",
               },
             ],
-            Next: "Map",
+            Next: "ValidOtpCheck",
             Assign: {
               input: "{% $states.input %}",
             },
+          },
+          ValidOtpCheck: {
+            Type: "Choice",
+            Choices: [
+              {
+                Next: "Map",
+                Condition: "{% ($states.input.valid) = (true) %}",
+              },
+            ],
+            Default: "Invalid OTP",
+          },
+          "Invalid OTP": {
+            Type: "Fail",
+            Error: "Invalid OTP",
+            Cause: "Entered owner and OTP pair is incorrect",
           },
           Map: {
             Type: "Map",
@@ -236,9 +246,7 @@ export function create(
             {
               statements: [
                 {
-                  actions: [
-                    "lambda:InvokeFunction",
-                  ],
+                  actions: ["lambda:InvokeFunction"],
                   resources: [args.sparkLambda.lambda.arn],
                 },
               ],
@@ -275,10 +283,7 @@ export function create(
         {
           statements: [
             {
-              actions: [
-                "states:StartExecution",
-                "states:StartSyncExecution",
-              ],
+              actions: ["states:StartExecution", "states:StartSyncExecution"],
               resources: [stateMachine.arn],
             },
           ],
