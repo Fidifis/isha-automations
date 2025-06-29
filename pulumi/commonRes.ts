@@ -36,8 +36,28 @@ export default class CommonRes extends pulumi.ComponentResource {
       bucket: this.procFilesBucket.id,
       rules: [
         {
-          id: "DeleteOldFiles",
+          id: "DeleteAllOldFiles",
           status: "Enabled",
+          expiration: {
+            days: 90,
+          },
+        },
+        // {
+        //   id: "DeleteDmqDownloads",
+        //   status: "Enabled",
+        //   filter: {
+        //     prefix: "dmq/download/"
+        //   },
+        //   expiration: {
+        //     days: 1,
+        //   },
+        // },
+        {
+          id: "DeleteVideoDownloads",
+          status: "Enabled",
+          filter: {
+            prefix: "video-render/download/"
+          },
           expiration: {
             days: 1,
           },
