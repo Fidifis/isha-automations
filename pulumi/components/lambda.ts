@@ -67,17 +67,17 @@ export interface GoLambdaProps {
     retention?: Input<number>;
   };
   role?: aws.iam.Role;
-  roleInlinePolicies?: Input<aws.types.input.iam.RoleInlinePolicy>[];
+  rolePolicyStatements?: Input<aws.types.input.iam.GetPolicyDocumentStatementArgs>[];
   env?: Input<aws.types.input.lambda.FunctionEnvironment>;
   ephemeralStorage?: Input<number>;
   layers?: Input<string>[];
   xray?: boolean;
 }
 
-export function constructLambdaName(nameProp: string | GoLambdaProps, suffix: Input<string>): pulumi.Output<string> {
-  const name = typeof nameProp === "string" ? nameProp : nameProp.name;
-  return pulumi.interpolate`${pulumi.getProject()}-${pulumi.getStack()}-${name}-${suffix}`;
-}
+// export function constructLambdaName(nameProp: string | GoLambdaProps, suffix: Input<string>): pulumi.Output<string> {
+//   const name = typeof nameProp === "string" ? nameProp : nameProp.name;
+//   return pulumi.interpolate`${pulumi.getProject()}-${pulumi.getStack()}-${name}-${suffix}`;
+// }
 
 export class GoLambda extends pulumi.ComponentResource {
   public readonly lambda: aws.lambda.Function;
@@ -91,54 +91,6 @@ export class GoLambda extends pulumi.ComponentResource {
   ) {
     super("fidifis:aws:Lambda", name, {}, opts);
 
-    const randomSuffix = new random.RandomString(`${name}-RndSuffix`, {
-        length: 5,
-        special: false,
-    }, { parent: this });
-    const lambdaName = args.name ?? constructLambdaName(name, randomSuffix.result);
-
-    this.logGroup = new aws.cloudwatch.LogGroup(
-      `${name}-Log`,
-      {
-        name: pulumi.interpolate`/aws/lambda/${lambdaName}`,
-        tags: args.tags,
-        retentionInDays: args.logs?.retention ?? 30,
-      },
-      { parent: this },
-    );
-
-    const loggingPolicy = {
-      name: "CloudWatch-logging",
-      policy: aws.iam.getPolicyDocumentOutput(
-        {
-          statements: [
-            {
-              actions: ["logs:CreateLogStream", "logs:PutLogEvents"],
-              resources: [
-                this.logGroup.arn,
-                pulumi.interpolate`${this.logGroup.arn}:*`,
-              ],
-            },
-          ],
-        },
-        { parent: this },
-      ).json,
-    };
-    const xrayPolicy = {
-      name: "XRay-metrics",
-      policy: aws.iam.getPolicyDocumentOutput(
-        {
-          statements: [
-            {
-              actions: ["xray:PutTelemetryRecords", "xray:PutTraceSegments"],
-              resources: ["*"],
-            },
-          ],
-        },
-        { parent: this },
-      ).json,
-    };
-
     if (args.role) {
       this.role = args.role;
     } else {
@@ -147,11 +99,6 @@ export class GoLambda extends pulumi.ComponentResource {
         {
           tags: args.tags,
           assumeRolePolicy: AssumePolicy.json,
-          inlinePolicies: [
-            loggingPolicy,
-            ...(args.xray ? [xrayPolicy] : []),
-            ...(args.roleInlinePolicies ?? []),
-          ],
         },
         { parent: this },
       );
@@ -166,7 +113,7 @@ export class GoLambda extends pulumi.ComponentResource {
       name,
       {
         // code: builder.asset,
-        name: lambdaName,
+        name: args.name,
         tags: args.tags,
         code: args.source.code,
         s3Bucket: args.source.s3Bucket?.id,
@@ -189,6 +136,55 @@ export class GoLambda extends pulumi.ComponentResource {
           size: args.ephemeralStorage ?? 512,
         },
         layers: args.layers,
+      },
+      { parent: this },
+    );
+
+    this.logGroup = new aws.cloudwatch.LogGroup(
+      `${name}-Log`,
+      {
+        name: pulumi.interpolate`/aws/lambda/${this.lambda.name}`,
+        tags: args.tags,
+        retentionInDays: args.logs?.retention ?? 30,
+      },
+      { parent: this },
+    );
+
+    const loggingStatements = {
+      actions: ["logs:CreateLogStream", "logs:PutLogEvents"],
+      resources: [
+        this.logGroup.arn,
+        pulumi.interpolate`${this.logGroup.arn}:/aws/lambda/${this.lambda.name}`,
+      ],
+    };
+
+    const xrayStatement = {
+      actions: ["xray:PutTelemetryRecords", "xray:PutTraceSegments"],
+      resources: ["*"],
+    };
+
+    const lambdaPolicy = new aws.iam.Policy(
+      `${name}-Policy`,
+      {
+        policy: aws.iam.getPolicyDocumentOutput(
+          {
+            statements: [
+              loggingStatements,
+              ...(args.xray ? [xrayStatement] : []),
+              ...(args.rolePolicyStatements ?? []),
+            ],
+          },
+          { parent: this },
+        ).json,
+      },
+      { parent: this },
+    );
+
+    new aws.iam.PolicyAttachment(
+      `${name}-Policy`,
+      {
+        roles: [this.role.arn],
+        policyArn: lambdaPolicy.arn,
       },
       { parent: this },
     );

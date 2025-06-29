@@ -121,6 +121,7 @@ export function create(
       ).json,
       inlinePolicies: [
         {
+          name: "operational",
           policy: aws.iam.getPolicyDocumentOutput(
             {
               statements: [

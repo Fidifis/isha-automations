@@ -1,13 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import { ApiGatewayRoute } from "../components/apiGateway";
-import {
-  Arch,
-  GoLambda,
-  HashFolder,
-  AssumePolicy,
-  constructLambdaName,
-} from "../components/lambda";
+import { Arch, GoLambda, HashFolder, AssumePolicy } from "../components/lambda";
 import { MetaProps } from "../utils";
 
 export interface VideoRenderProps {
@@ -32,60 +26,6 @@ export default class VideoRender extends pulumi.ComponentResource {
 
     const xray = true;
 
-    const lambdaPolicy = new aws.iam.Policy(
-      `${name}-Policy`,
-      {
-        policy: aws.iam.getPolicyDocumentOutput(
-          {
-            statements: [
-              {
-                actions: ["ssm:GetParameter"],
-                resources: [args.gcpConfigParam.arn],
-              },
-              {
-                actions: ["s3:ListBucket"],
-                resources: [args.procFilesBucket.arn, args.assetsBucket.arn],
-              },
-              {
-                actions: ["s3:PutObject", "s3:GetObject"],
-                resources: [
-                  pulumi.interpolate`${args.procFilesBucket.arn}/video-render/*`,
-                ],
-              },
-              {
-                actions: ["s3:GetObject"],
-                resources: [
-                  pulumi.interpolate`${args.assetsBucket.arn}/fonts/*`,
-                ],
-              },
-            ],
-          },
-          { parent: this },
-        ).json,
-      },
-      { parent: this },
-    );
-
-    const TransferHelperPolicy = new aws.iam.Policy(
-      `${name}-TransferPolicy`,
-      {
-        policy: aws.iam.getPolicyDocumentOutput(
-          {
-            statements: [
-              {
-                actions: ["s3:PutObject", "s3:GetObject"],
-                resources: [
-                  pulumi.interpolate`${args.procFilesBucket.arn}/video-render/*`,
-                ],
-              },
-            ],
-          },
-          { parent: this },
-        ).json,
-      },
-      { parent: this },
-    );
-
     const videoRole = new aws.iam.Role(
       `${name}-Role`,
       {
@@ -93,23 +33,7 @@ export default class VideoRender extends pulumi.ComponentResource {
         assumeRolePolicy: AssumePolicy.json,
         inlinePolicies: [
           {
-            name: "logging",
-            policy: aws.iam.getPolicyDocumentOutput(
-              {
-                statements: [
-                  {
-                    actions: ["logs:CreateLogStream", "logs:PutLogEvents"],
-                    resources: [
-                      pulumi.interpolate`arn:aws:logs:${args.meta.region}:${args.meta.accountId}:log-group:/aws/lambda/${constructLambdaName(name)}*`,
-                    ],
-                  },
-                ],
-              },
-              { parent: this },
-            ).json,
-          },
-          {
-            name: "xray",
+            name: "Logging",
             policy: aws.iam.getPolicyDocumentOutput(
               {
                 statements: [
@@ -125,24 +49,52 @@ export default class VideoRender extends pulumi.ComponentResource {
               { parent: this },
             ).json,
           },
+          {
+            name: "WorkPermissions",
+            policy: aws.iam.getPolicyDocumentOutput(
+              {
+                statements: [
+                  {
+                    actions: ["s3:PutObject", "s3:GetObject"],
+                    resources: [
+                      pulumi.interpolate`${args.procFilesBucket.arn}/video-render/*`,
+                    ],
+                  },
+                  {
+                    actions: ["logs:CreateLogStream", "logs:PutLogEvents"],
+                    resources: [
+                      pulumi.interpolate`arn:aws:logs:${args.meta.region}:${args.meta.accountId}:log-group:/aws/lambda/${pulumi.getProject()}-${pulumi.getStack()}-${name}*`,
+                    ],
+                  },
+                  {
+                    actions: ["ssm:GetParameter"],
+                    resources: [args.gcpConfigParam.arn],
+                  },
+                  {
+                    actions: ["s3:ListBucket"],
+                    resources: [
+                      args.procFilesBucket.arn,
+                      args.assetsBucket.arn,
+                    ],
+                  },
+                  {
+                    actions: ["s3:PutObject", "s3:GetObject"],
+                    resources: [
+                      pulumi.interpolate`${args.procFilesBucket.arn}/video-render/*`,
+                    ],
+                  },
+                  {
+                    actions: ["s3:GetObject"],
+                    resources: [
+                      pulumi.interpolate`${args.assetsBucket.arn}/fonts/*`,
+                    ],
+                  },
+                ],
+              },
+              { parent: this },
+            ).json,
+          },
         ],
-      },
-      { parent: this },
-    );
-
-    new aws.iam.PolicyAttachment(
-      `${name}-Policy`,
-      {
-        roles: [videoRole],
-        policyArn: lambdaPolicy.arn,
-      },
-      { parent: this },
-    );
-    new aws.iam.PolicyAttachment(
-      `${name}-TransferPolicy`,
-      {
-        roles: [videoRole],
-        policyArn: TransferHelperPolicy.arn,
       },
       { parent: this },
     );
@@ -381,7 +333,8 @@ export default class VideoRender extends pulumi.ComponentResource {
                 jobId: "{% $states.result.Payload.result %}",
                 videoDriveFolderId: "{% $states.input.videoDriveFolderId %}",
                 videoDriveId: "{% $states.input.videoDriveId %}",
-                videoFileId: "{% $exists($states.input.videoFileId) ? $states.input.videoFileId : null %}",
+                videoFileId:
+                  "{% $exists($states.input.videoFileId) ? $states.input.videoFileId : null %}",
                 srtDriveFolderId: "{% $states.input.srtDriveFolderId %}",
                 srtDriveId: "{% $states.input.srtDriveId %}",
                 destinationFolderId: "{% $states.input.destinationFolderId %}",
