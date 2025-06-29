@@ -90,7 +90,7 @@ export default class CommonRes extends pulumi.ComponentResource {
     );
 
     this.sparkLambda = new GoLambda(
-      `Spark`,
+      "Spark",
       {
         tags,
         source: {

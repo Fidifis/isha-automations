@@ -5,6 +5,7 @@ import { Input } from "@pulumi/pulumi";
 import * as fs from "fs";
 import * as path from "path";
 import * as crypto from "crypto";
+import * as random from "@pulumi/random";
 
 export enum Arch {
   x86 = "x86_64",
@@ -73,9 +74,9 @@ export interface GoLambdaProps {
   xray?: boolean;
 }
 
-export function constructLambdaName(nameProp: string | GoLambdaProps): string {
+export function constructLambdaName(nameProp: string | GoLambdaProps, suffix: Input<string>): pulumi.Output<string> {
   const name = typeof nameProp === "string" ? nameProp : nameProp.name;
-  return `${pulumi.getProject()}-${pulumi.getStack()}-${name}`;
+  return pulumi.interpolate`${pulumi.getProject()}-${pulumi.getStack()}-${name}-${suffix}`;
 }
 
 export class GoLambda extends pulumi.ComponentResource {
@@ -88,14 +89,18 @@ export class GoLambda extends pulumi.ComponentResource {
     args: GoLambdaProps,
     opts?: pulumi.ComponentResourceOptions,
   ) {
-    super("fidifis:aws:LambdaGo", name, {}, opts);
+    super("fidifis:aws:Lambda", name, {}, opts);
 
-    const lambdaName = constructLambdaName(args.name ?? name);
+    const randomSuffix = new random.RandomString(`${name}-RndSuffix`, {
+        length: 5,
+        special: false,
+    }, { parent: this });
+    const lambdaName = args.name ?? constructLambdaName(name, randomSuffix.result);
 
     this.logGroup = new aws.cloudwatch.LogGroup(
       `${name}-Log`,
       {
-        name: `/aws/lambda/${lambdaName}`,
+        name: pulumi.interpolate`/aws/lambda/${lambdaName}`,
         tags: args.tags,
         retentionInDays: args.logs?.retention ?? 30,
       },
