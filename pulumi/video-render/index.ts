@@ -66,6 +66,26 @@ export default class VideoRender extends pulumi.ComponentResource {
       { parent: this },
     );
 
+    const TransferHelperPolicy = new aws.iam.Policy(
+      `${name}-TransferPolicy`,
+      {
+        policy: aws.iam.getPolicyDocumentOutput(
+          {
+            statements: [
+              {
+                actions: ["s3:PutObject", "s3:GetObject"],
+                resources: [
+                  pulumi.interpolate`${args.procFilesBucket.arn}/video-render/*`,
+                ],
+              },
+            ],
+          },
+          { parent: this },
+        ).json,
+      },
+      { parent: this },
+    );
+
     const videoRole = new aws.iam.Role(
       `${name}-Role`,
       {
@@ -115,6 +135,14 @@ export default class VideoRender extends pulumi.ComponentResource {
       {
         roles: [videoRole],
         policyArn: lambdaPolicy.arn,
+      },
+      { parent: this },
+    );
+    new aws.iam.PolicyAttachment(
+      `${name}-TransferPolicy`,
+      {
+        roles: [videoRole],
+        policyArn: TransferHelperPolicy.arn,
       },
       { parent: this },
     );

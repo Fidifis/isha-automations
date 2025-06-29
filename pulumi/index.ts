@@ -1,7 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import { DMQs } from "./dmqs";
-import ApiAccess from "./apiAccess";
 import RestApiGateway from "./components/apiGateway";
 import VideoRender from "./video-render";
 import CommonRes from "./commonRes";
@@ -12,18 +11,18 @@ interface ConfigDomains {
   api: string;
 }
 
-const apiUsers = ["gr-cz"]
+const apiUsers = ["gr-cz"];
 
 const usagePlanQuotas = {
-        throttle: {
-          burstLimit: 10,
-          rateLimit: 1,
-        },
-        quota: {
-          limit: 50,
-          period: "DAY",
-        },
-}
+  throttle: {
+    burstLimit: 10,
+    rateLimit: 1,
+  },
+  quota: {
+    limit: 50,
+    period: "DAY",
+  },
+};
 
 async function main() {
   const config = new pulumi.Config();
@@ -56,7 +55,6 @@ async function main() {
 
   const helperLambda = new HelperLambda("Helper", {
     meta,
-    codeBucket,
     procFilesBucket,
     gcpConfigParam,
   });
@@ -68,6 +66,7 @@ async function main() {
     procFilesBucket,
     gcpConfigParam,
     sparkLambda,
+    otpLambda: helperLambda.otpLambda,
   });
   const videoRender = new VideoRender("VideoRender", {
     meta,
@@ -83,15 +82,17 @@ async function main() {
     tags,
     domain: domains.api,
     xray: true,
-    usagePlans: apiUsers.map(user => {
-    return {
-      name: user,
-      apiKeys: [ {
+    usagePlans: apiUsers.map((user) => {
+      return {
+        name: user,
+        apiKeys: [
+          {
             name: user,
-          } ],
-      ...usagePlanQuotas,
-    }
-  }),
+          },
+        ],
+        ...usagePlanQuotas,
+      };
+    }),
 
     routes: [...videoRender.routes, ...dmqs.routes],
   });

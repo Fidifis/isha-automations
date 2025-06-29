@@ -5,13 +5,13 @@ import { MetaProps } from "./utils";
 
 export interface HelperProps {
   meta: MetaProps;
-  codeBucket: aws.s3.BucketV2;
   procFilesBucket: aws.s3.BucketV2;
   gcpConfigParam: aws.ssm.Parameter;
 }
 
 export default class HelperLambda extends pulumi.ComponentResource {
   public readonly transferLambda: GoLambda;
+  public readonly otpLambda: GoLambda;
 
   constructor(
     name: string,
@@ -20,29 +20,34 @@ export default class HelperLambda extends pulumi.ComponentResource {
   ) {
     super("project:components:helperLambda", name, {}, opts);
 
-    const lambdaPolicy = new aws.iam.Policy(
-      `${name}-Policy`,
-      {
-        policy: aws.iam.getPolicyDocumentOutput(
-          {
-            statements: [
-              {
-                actions: ["ssm:GetParameter"],
-                resources: [args.gcpConfigParam.arn],
-              },
-              {
-                actions: ["s3:PutObject", "s3:GetObject"],
-                resources: [
-                  pulumi.interpolate`${args.procFilesBucket.arn}/*`,
-                ],
-              },
-            ],
-          },
-          { parent: this },
-        ).json,
-      },
-      { parent: this },
-    );
+    const lambdaPolicy = {
+      policy: aws.iam.getPolicyDocumentOutput(
+        {
+          statements: [
+            {
+              actions: ["ssm:GetParameter"],
+              resources: [args.gcpConfigParam.arn],
+            },
+          ],
+        },
+        { parent: this },
+      ).json,
+    };
+    const otpAuthLambdaPolicy = {
+      policy: aws.iam.getPolicyDocumentOutput(
+        {
+          statements: [
+            {
+              actions: ["ssm:GetParametersByPath"],
+              resources: [
+                `arn:aws:ssm:${args.meta.region}:${args.meta.accountId}:parameter/isha/${pulumi.getStack()}/otp`,
+              ],
+            },
+          ],
+        },
+        { parent: this },
+      ).json,
+    };
 
     this.transferLambda = new GoLambda(
       `${name}-TransferFiles`,
@@ -57,6 +62,7 @@ export default class HelperLambda extends pulumi.ComponentResource {
         timeout: 300,
         memory: 256,
         ephemeralStorage: 10240,
+        roleInlinePolicies: [lambdaPolicy],
         xray: true,
         logs: { retention: 30 },
         env: {
@@ -67,20 +73,30 @@ export default class HelperLambda extends pulumi.ComponentResource {
       },
       { parent: this },
     );
-
-    new aws.iam.PolicyAttachment(
-      `${name}-Policy`,
+    this.otpLambda = new GoLambda(
+      `${name}-OtpAuth`,
       {
-        roles: [
-          this.transferLambda.role,
-        ],
-        policyArn: lambdaPolicy.arn,
+        tags: args.meta.tags,
+        source: {
+          code: "../bin/authorizer-otp.zip",
+          hash: HashFolder("../code/authorizer-otp/"),
+        },
+        architecture: Arch.arm,
+        roleInlinePolicies: [otpAuthLambdaPolicy],
+        xray: true,
+        logs: { retention: 30 },
+        env: {
+          variables: {
+            SSM_PREFIX_PATH: `/isha/${pulumi.getStack()}/otp`,
+          },
+        },
       },
       { parent: this },
     );
 
     this.registerOutputs({
       transferLambda: this.transferLambda,
+      otpLambda: this.otpLambda,
     });
   }
 }
