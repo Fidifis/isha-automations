@@ -5,7 +5,6 @@ import { Input } from "@pulumi/pulumi";
 import * as fs from "fs";
 import * as path from "path";
 import * as crypto from "crypto";
-import * as random from "@pulumi/random";
 
 export enum Arch {
   x86 = "x86_64",
@@ -183,7 +182,7 @@ export class GoLambda extends pulumi.ComponentResource {
     new aws.iam.PolicyAttachment(
       `${name}-Policy`,
       {
-        roles: [this.role.arn],
+        roles: [this.role],
         policyArn: lambdaPolicy.arn,
       },
       { parent: this },
