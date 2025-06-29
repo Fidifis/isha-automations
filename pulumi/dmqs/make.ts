@@ -170,7 +170,7 @@ export function create(
             Arguments: {
               FunctionName: pulumi.interpolate`${copyPhotoLambda.lambda.arn}:$LATEST`,
               Payload: {
-                jobId: "$states.input.jobId",
+                jobId: "{% $states.input.jobId %}",
                 direction: "driveToS3",
                 driveFolderId: "{% $states.input.sourceDriveFolderId %}",
                 driveId: "{% $states.input.sourceDriveId %}",
@@ -262,7 +262,7 @@ export function create(
                   Arguments: {
                     FunctionName: pulumi.interpolate`${copyPhotoLambda.lambda.arn}:$LATEST`,
                     Payload: {
-                      jobId: "$input.jobId",
+                      jobId: "{% $input.jobId %}",
                       direction: "s3ToDrive",
                       driveFolderId: "{% $input.destDriveFolderId %}",
                       s3Bucket: args.procFilesBucket.id,
