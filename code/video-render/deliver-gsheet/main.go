@@ -22,14 +22,15 @@ var (
 	log      *zap.SugaredLogger
 	sheetSvc *sheets.Service
 )
+
 const errorReplKey = "$errmsg"
 const jobIdKey = "$jobid"
 
 type Event struct {
-	JobId string `json:"jobId"`
-	DeliveryParams string `json:"deliveryParams"`
+	JobId               string `json:"jobId"`
+	DeliveryParams      string `json:"deliveryParams"`
 	ErrorDeliveryParams string `json:"errDeliveryParams"`
-	ErrorMessage string `json:"errMsg"`
+	ErrorMessage        string `json:"errMsg"`
 }
 
 type SheetSetCellVals struct {
@@ -39,8 +40,8 @@ type SheetSetCellVals struct {
 	Value     string `json:"value"`
 }
 type DeliveryParams struct {
-	SheetId     string             `json:"sheetId"`
-	SetValues   []SheetSetCellVals `json:"setValues"`
+	SheetId   string             `json:"sheetId"`
+	SetValues []SheetSetCellVals `json:"setValues"`
 }
 
 func main() {

@@ -75,7 +75,7 @@ async function main() {
     procFilesBucket,
     rng: rngLambda.lambda,
     gcpConfigParam,
-    fileTranferLambda: helperLambda.transferLambda.lambda,
+    fileTranferLambda: helperLambda.transferLambda,
   });
 
   new RestApiGateway(`rest-Api`, {

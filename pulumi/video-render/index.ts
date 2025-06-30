@@ -11,7 +11,7 @@ export interface VideoRenderProps {
   assetsBucket: aws.s3.BucketV2;
   rng: aws.lambda.Function;
   gcpConfigParam: aws.ssm.Parameter;
-  fileTranferLambda: aws.lambda.Function;
+  fileTranferLambda: GoLambda;
 }
 
 export default class VideoRender extends pulumi.ComponentResource {
@@ -25,6 +25,26 @@ export default class VideoRender extends pulumi.ComponentResource {
     super("project:components:video-render", name, {}, opts);
 
     const xray = true;
+
+    const s3Policy = new aws.iam.Policy(
+      `${name}-S3Policy`,
+      {
+        policy: aws.iam.getPolicyDocumentOutput(
+          {
+            statements: [
+              {
+                actions: ["s3:PutObject", "s3:GetObject"],
+                resources: [
+                  pulumi.interpolate`${args.procFilesBucket.arn}/video-render/*`,
+                ],
+              },
+            ],
+          },
+          { parent: this },
+        ).json,
+      },
+      { parent: this },
+    );
 
     const videoRole = new aws.iam.Role(
       `${name}-Role`,
@@ -55,12 +75,6 @@ export default class VideoRender extends pulumi.ComponentResource {
               {
                 statements: [
                   {
-                    actions: ["s3:PutObject", "s3:GetObject"],
-                    resources: [
-                      pulumi.interpolate`${args.procFilesBucket.arn}/video-render/*`,
-                    ],
-                  },
-                  {
                     actions: ["logs:CreateLogStream", "logs:PutLogEvents"],
                     resources: [
                       pulumi.interpolate`arn:aws:logs:${args.meta.region}:${args.meta.accountId}:log-group:/aws/lambda/${pulumi.getProject()}-${pulumi.getStack()}-${name}*`,
@@ -78,12 +92,6 @@ export default class VideoRender extends pulumi.ComponentResource {
                     ],
                   },
                   {
-                    actions: ["s3:PutObject", "s3:GetObject"],
-                    resources: [
-                      pulumi.interpolate`${args.procFilesBucket.arn}/video-render/*`,
-                    ],
-                  },
-                  {
                     actions: ["s3:GetObject"],
                     resources: [
                       pulumi.interpolate`${args.assetsBucket.arn}/fonts/*`,
@@ -95,6 +103,15 @@ export default class VideoRender extends pulumi.ComponentResource {
             ).json,
           },
         ],
+      },
+      { parent: this },
+    );
+
+    new aws.iam.PolicyAttachment(
+      `${name}-S3Policy`,
+      {
+        roles: [videoRole, args.fileTranferLambda.role],
+        policyArn: s3Policy.arn,
       },
       { parent: this },
     );
@@ -525,7 +542,7 @@ export default class VideoRender extends pulumi.ComponentResource {
               Resource: "arn:aws:states:::lambda:invoke",
               Output: "{% $states.result.Payload %}",
               Arguments: {
-                FunctionName: pulumi.interpolate`${args.fileTranferLambda.arn}:$LATEST`,
+                FunctionName: pulumi.interpolate`${args.fileTranferLambda.lambda.arn}:$LATEST`,
                 Payload: {
                   direction: "s3ToDrive",
                   s3Bucket: args.procFilesBucket.id,
