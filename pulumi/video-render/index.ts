@@ -573,6 +573,7 @@ export default class VideoRender extends pulumi.ComponentResource {
               Arguments: {
                 FunctionName: pulumi.interpolate`${lambdaDeliverGSheet.lambda.arn}:$LATEST`,
                 Payload: {
+                  jobId: "{% $jobId %}",
                   deliveryParams: "{% $delivieryParams %}",
                 },
               },
@@ -608,6 +609,7 @@ export default class VideoRender extends pulumi.ComponentResource {
               Arguments: {
                 FunctionName: pulumi.interpolate`${lambdaDeliverGSheet.lambda.arn}:$LATEST`,
                 Payload: {
+                  jobId: "{% $jobId %}",
                   deliveryParams: "{% $delivieryParams %}",
                   errDeliveryParams: "{% $errDeliveryParams %}",
                   errMsg: "{% $states.input.err %}",

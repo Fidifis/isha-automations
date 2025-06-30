@@ -23,8 +23,10 @@ var (
 	sheetSvc *sheets.Service
 )
 const errorReplKey = "$errmsg"
+const jobIdKey = "$jobid"
 
 type Event struct {
+	JobId string `json:"jobId"`
 	DeliveryParams string `json:"deliveryParams"`
 	ErrorDeliveryParams string `json:"errDeliveryParams"`
 	ErrorMessage string `json:"errMsg"`
@@ -108,10 +110,13 @@ func WriteToSheet(ctx context.Context, params DeliveryParams) error {
 	return nil
 }
 
-func handleError(errorStr string, params *DeliveryParams) {
+func substituteVars(jobId string, errorMsg string, params *DeliveryParams) {
 	for i, p := range params.SetValues {
 		if strings.Contains(p.Value, errorReplKey) {
-			params.SetValues[i].Value = strings.ReplaceAll(p.Value, errorReplKey, errorStr)
+			params.SetValues[i].Value = strings.ReplaceAll(p.Value, errorReplKey, errorMsg)
+		}
+		if strings.Contains(p.Value, jobIdKey) {
+			params.SetValues[i].Value = strings.ReplaceAll(p.Value, jobIdKey, jobId)
 		}
 	}
 }
@@ -130,9 +135,7 @@ func HandleRequest(ctx context.Context, event Event) error {
 		return errors.Join(errors.New("Failed to Unmarshal deliveryParams"), err)
 	}
 
-	if event.ErrorDeliveryParams != "" {
-		handleError(event.ErrorMessage, &params)
-	}
+	substituteVars(event.JobId, event.ErrorMessage, &params)
 
 	err = WriteToSheet(ctx, params)
 	if err != nil {
