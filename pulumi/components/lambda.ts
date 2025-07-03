@@ -153,7 +153,7 @@ export class GoLambda extends pulumi.ComponentResource {
       actions: ["logs:CreateLogStream", "logs:PutLogEvents"],
       resources: [
         this.logGroup.arn,
-        pulumi.interpolate`${this.logGroup.arn}:/aws/lambda/${this.lambda.name}`,
+        pulumi.interpolate`${this.logGroup.arn}:*`,
       ],
     };
 

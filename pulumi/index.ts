@@ -90,7 +90,7 @@ async function main() {
         name: user,
         apiKeys: [
           {
-            name: user,
+            name: "primary",
           },
         ],
         ...usagePlanQuotas,
