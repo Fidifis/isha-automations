@@ -11,7 +11,10 @@ interface ConfigDomains {
   api: string;
 }
 
-const apiUsers = ["gr-cz"];
+const apiUsers = [
+  "gr-cz",
+  "gr-demo",
+];
 
 const usagePlanQuotas = {
   throttle: {
