@@ -87,12 +87,15 @@ func columnToLetter(column int) string {
 func WriteToSheet(ctx context.Context, params DeliveryParams) error {
 	var valueRanges []*sheets.ValueRange
 
+	log.Debug("Writing to sheet: ", params.SheetId)
+
 	for _, cellVal := range params.SetValues {
 		// Convert 0-based index to A1 notation (e.g., A1, B2)
 		// In A1 notation, columns start with A and rows start with 1
 		columnLetter := columnToLetter(cellVal.Column)
 		cellReference := fmt.Sprintf("%s!%s%d", cellVal.SheetName, columnLetter, cellVal.Row+1)
 
+		log.Debug("Writing to cell: ", cellReference)
 		valueRange := &sheets.ValueRange{
 			Range:  cellReference,
 			Values: [][]interface{}{{cellVal.Value}},
@@ -113,11 +116,12 @@ func WriteToSheet(ctx context.Context, params DeliveryParams) error {
 
 func substituteVars(jobId string, errorMsg string, params *DeliveryParams) {
 	for i, p := range params.SetValues {
-		if strings.Contains(p.Value, errorReplKey) {
-			params.SetValues[i].Value = strings.ReplaceAll(p.Value, errorReplKey, errorMsg)
+		val_ref := &params.SetValues[i].Value
+		if strings.Contains(*val_ref, errorReplKey) {
+			*val_ref = strings.ReplaceAll(*val_ref, errorReplKey, errorMsg)
 		}
 		if strings.Contains(p.Value, jobIdKey) {
-			params.SetValues[i].Value = strings.ReplaceAll(p.Value, jobIdKey, jobId)
+			*val_ref = strings.ReplaceAll(*val_ref, jobIdKey, jobId)
 		}
 	}
 }
@@ -125,8 +129,10 @@ func substituteVars(jobId string, errorMsg string, params *DeliveryParams) {
 func HandleRequest(ctx context.Context, event Event) error {
 	var paramsStr string
 	if event.ErrorDeliveryParams != "" {
+		log.Info("error delivery")
 		paramsStr = event.ErrorDeliveryParams
 	} else {
+		log.Info("normal delivery")
 		paramsStr = event.DeliveryParams
 	}
 
