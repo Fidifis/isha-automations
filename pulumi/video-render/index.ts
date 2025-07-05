@@ -273,13 +273,11 @@ export default class VideoRender extends pulumi.ComponentResource {
         },
         definition: pulumi.jsonStringify({
           Comment: "A description of my state machine",
-          StartAt: "Copy files in",
+          StartAt: "Assign vars",
           QueryLanguage: "JSONata",
           States: {
-            "Copy files in": {
-              Type: "Task",
-              Resource: "arn:aws:states:::lambda:invoke",
-              Output: "{% $states.result.Payload %}",
+            "Assign vars": {
+              Type: "Pass",
               Assign: {
                 jobId: "{% $states.input.jobId %}",
                 videoDriveFolderId: "{% $states.input.videoDriveFolderId %}",
@@ -293,13 +291,19 @@ export default class VideoRender extends pulumi.ComponentResource {
                 delivieryParams: "{% $states.input.deliveryParams %}",
                 errDeliveryParams: "{% $states.input.errDeliveryParams %}",
               },
+              Next: "Copy files in",
+            },
+            "Copy files in": {
+              Type: "Task",
+              Resource: "arn:aws:states:::lambda:invoke",
+              Output: "{% $states.result.Payload %}",
               Arguments: {
                 FunctionName: pulumi.interpolate`${lambdaCopyIn.lambda.arn}:$LATEST`,
                 Payload: {
-                  sourceDriveFolderId: "{% $states.input.videoDriveFolderId %}",
-                  driveId: "{% $states.input.videoDriveId %}",
-                  jobId: "{% $states.input.jobId %}",
-                  videoFileId: "{% $states.input.videoFileId %}",
+                  jobId: "{% $jobId %}",
+                  sourceDriveFolderId: "{% $videoDriveFolderId %}",
+                  driveId: "{% $videoDriveId %}",
+                  videoFileId: "{% $videoFileId %}",
                 },
               },
               Retry: [
