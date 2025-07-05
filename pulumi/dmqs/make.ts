@@ -3,11 +3,7 @@ import * as aws from "@pulumi/aws";
 import { Arch, GoLambda, HashFolder } from "../components/lambda";
 import { DMQsProps } from "./index";
 
-export function create(
-  parent: pulumi.Resource,
-  name: string,
-  args: DMQsProps,
-) {
+export function create(parent: pulumi.Resource, name: string, args: DMQsProps) {
   const xray = true;
 
   const procBcktPolicy = new aws.iam.Policy(
@@ -91,70 +87,11 @@ export function create(
     { parent },
   );
 
-  const stateRole = new aws.iam.Role(
-    `${name}-SFSM`,
-    {
-      tags: args.meta.tags,
-      assumeRolePolicy: aws.iam.getPolicyDocumentOutput(
-        {
-          statements: [
-            {
-              effect: "Allow",
-              principals: [
-                {
-                  type: "Service",
-                  identifiers: ["states.amazonaws.com"],
-                },
-              ],
-              actions: ["sts:AssumeRole"],
-              conditions: [
-                {
-                  test: "StringEquals",
-                  variable: "aws:SourceAccount",
-                  values: [args.meta.accountId],
-                },
-              ],
-            },
-          ],
-        },
-        { parent },
-      ).json,
-      inlinePolicies: [
-        {
-          name: "operational",
-          policy: aws.iam.getPolicyDocumentOutput(
-            {
-              statements: [
-                {
-                  actions: ["lambda:InvokeFunction"],
-                  resources: [
-                    pulumi.interpolate`arn:aws:lambda:${args.meta.region}:${args.meta.accountId}:function:${pulumi.getProject()}-${pulumi.getStack()}-*`,
-                  ],
-                },
-                {
-                  actions: [
-                    "xray:PutTelemetryRecords",
-                    "xray:PutTraceSegments",
-                    "xray:GetSamplingRules",
-                    "xray:GetSamplingTargets",
-                  ],
-                  resources: ["*"],
-                },
-              ],
-            },
-            { parent },
-          ).json,
-        },
-      ],
-    },
-    { parent },
-  );
-
   const stateMachine = new aws.sfn.StateMachine(
     `${name}`,
     {
       tags: args.meta.tags,
-      roleArn: stateRole.arn,
+      roleArn: args.sfnExec.arn,
       tracingConfiguration: {
         enabled: xray,
       },
@@ -292,58 +229,12 @@ export function create(
     { parent },
   );
 
-  const apiGwExec = new aws.iam.Role(
-    `${name}-ApiGwExec`,
-    {
-      tags: args.meta.tags,
-      assumeRolePolicy: aws.iam.getPolicyDocumentOutput(
-        {
-          statements: [
-            {
-              effect: "Allow",
-              principals: [
-                {
-                  type: "Service",
-                  identifiers: ["apigateway.amazonaws.com"],
-                },
-              ],
-              actions: ["sts:AssumeRole"],
-            },
-          ],
-        },
-        { parent },
-      ).json,
-      inlinePolicies: [
-        {
-          policy: aws.iam.getPolicyDocumentOutput(
-            {
-              statements: [
-                {
-                  actions: [
-                    // "states:StartExecution",
-                    // "states:StopExecution",
-                    // "states:StartSyncExecution",
-                    "lambda:InvokeFunction",
-                  ],
-                  // resources: [stateMachine.arn],
-                  resources: [args.sparkLambda.lambda.arn],
-                },
-              ],
-            },
-            { parent },
-          ).json,
-        },
-      ],
-    },
-    { parent },
-  );
-
   const routes = [
     {
       path: "/unstable/v2/dmq/make",
       method: "POST",
       eventHandler: args.sparkLambda.lambda,
-      execRole: apiGwExec,
+      execRole: args.sparkApiGwExec,
       requestTemplate: {
         "application/json": pulumi.jsonStringify({
           input: "$util.escapeJavaScript($input.json('$'))",
@@ -362,10 +253,7 @@ export function create(
         {
           statements: [
             {
-              actions: [
-                "states:StartExecution",
-                "states:StartSyncExecution",
-              ],
+              actions: ["states:StartExecution", "states:StartSyncExecution"],
               resources: [stateMachine.arn],
             },
           ],

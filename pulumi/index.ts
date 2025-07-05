@@ -11,10 +11,7 @@ interface ConfigDomains {
   api: string;
 }
 
-const apiUsers = [
-  "gr-cz",
-  "gr-demo",
-];
+const apiUsers = ["gr-cz", "gr-demo"];
 
 const usagePlanQuotas = {
   throttle: {
@@ -46,9 +43,10 @@ async function main() {
     assetsBucket,
     procFilesBucket,
     gcpConfigParam,
-    rngLambda,
     sparkLambda,
-  } = new CommonRes("CommonRes", tags);
+    sparkApiGwExec,
+    sfnExec,
+  } = new CommonRes("CommonRes", meta);
 
   // const { apiAuthorizer } = new ApiAccess("ApiAuthorizerPSK", {
   //   codeBucket,
@@ -70,15 +68,19 @@ async function main() {
     gcpConfigParam,
     sparkLambda,
     otpLambda: helperLambda.otpLambda,
+    sparkApiGwExec,
+    sfnExec,
   });
   const videoRender = new VideoRender("VideoRender", {
     meta,
     codeBucket,
     assetsBucket,
     procFilesBucket,
-    rng: rngLambda.lambda,
     gcpConfigParam,
     fileTranferLambda: helperLambda.transferLambda,
+    sparkLambda,
+    sparkApiGwExec,
+    sfnExec,
   });
 
   new RestApiGateway(`rest-Api`, {

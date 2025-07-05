@@ -9,9 +9,11 @@ export interface VideoRenderProps {
   codeBucket: aws.s3.BucketV2;
   procFilesBucket: aws.s3.BucketV2;
   assetsBucket: aws.s3.BucketV2;
-  rng: aws.lambda.Function;
+  sparkLambda: GoLambda;
   gcpConfigParam: aws.ssm.Parameter;
   fileTranferLambda: GoLambda;
+  sparkApiGwExec: aws.iam.Role;
+  sfnExec: aws.iam.Role;
 }
 
 export default class VideoRender extends pulumi.ComponentResource {
@@ -261,93 +263,25 @@ export default class VideoRender extends pulumi.ComponentResource {
       { parent: this },
     );
 
-    const stateRole = new aws.iam.Role(
-      `${name}-SFSM`,
-      {
-        tags: args.meta.tags,
-        assumeRolePolicy: aws.iam.getPolicyDocumentOutput(
-          {
-            statements: [
-              {
-                effect: "Allow",
-                principals: [
-                  {
-                    type: "Service",
-                    identifiers: ["states.amazonaws.com"],
-                  },
-                ],
-                actions: ["sts:AssumeRole"],
-                conditions: [
-                  {
-                    test: "StringEquals",
-                    variable: "aws:SourceAccount",
-                    values: [args.meta.accountId],
-                  },
-                ],
-              },
-            ],
-          },
-          { parent: this },
-        ).json,
-        inlinePolicies: [
-          {
-            policy: aws.iam.getPolicyDocumentOutput(
-              {
-                statements: [
-                  {
-                    actions: ["lambda:InvokeFunction"],
-                    resources: [
-                      pulumi.interpolate`arn:aws:lambda:${args.meta.region}:${args.meta.accountId}:function:${pulumi.getProject()}-${pulumi.getStack()}-*`,
-                    ],
-                  },
-                  {
-                    actions: [
-                      "xray:PutTelemetryRecords",
-                      "xray:PutTraceSegments",
-                      "xray:GetSamplingRules",
-                      "xray:GetSamplingTargets",
-                    ],
-                    resources: ["*"],
-                  },
-                ],
-              },
-              { parent: this },
-            ).json,
-          },
-        ],
-      },
-      { parent: this },
-    );
-
     const stateMachine = new aws.sfn.StateMachine(
       `${name}`,
       {
         tags: args.meta.tags,
-        roleArn: stateRole.arn,
+        roleArn: args.sfnExec.arn,
         tracingConfiguration: {
           enabled: xray,
         },
         definition: pulumi.jsonStringify({
           Comment: "A description of my state machine",
-          StartAt: "jobID",
+          StartAt: "Copy files in",
           QueryLanguage: "JSONata",
           States: {
-            jobID: {
+            "Copy files in": {
               Type: "Task",
               Resource: "arn:aws:states:::lambda:invoke",
-              Output: "{% $states.input %}",
-              Retry: [
-                {
-                  ErrorEquals: ["Lambda.TooManyRequestsException"],
-                  IntervalSeconds: 1,
-                  MaxAttempts: 3,
-                  BackoffRate: 2,
-                  JitterStrategy: "FULL",
-                },
-              ],
-              Next: "Copy files in",
+              Output: "{% $states.result.Payload %}",
               Assign: {
-                jobId: "{% $states.result.Payload.result %}",
+                jobId: "{% $states.input.jobId %}",
                 videoDriveFolderId: "{% $states.input.videoDriveFolderId %}",
                 videoDriveId: "{% $states.input.videoDriveId %}",
                 videoFileId:
@@ -360,23 +294,12 @@ export default class VideoRender extends pulumi.ComponentResource {
                 errDeliveryParams: "{% $states.input.errDeliveryParams %}",
               },
               Arguments: {
-                FunctionName: pulumi.interpolate`${args.rng.arn}:$LATEST`,
-                Payload: {
-                  length: 5,
-                },
-              },
-            },
-            "Copy files in": {
-              Type: "Task",
-              Resource: "arn:aws:states:::lambda:invoke",
-              Output: "{% $states.result.Payload %}",
-              Arguments: {
                 FunctionName: pulumi.interpolate`${lambdaCopyIn.lambda.arn}:$LATEST`,
                 Payload: {
-                  sourceDriveFolderId: "{% $videoDriveFolderId %}",
-                  driveId: "{% $videoDriveId %}",
-                  jobId: "{% $jobId %}",
-                  videoFileId: "{% $videoFileId %}",
+                  sourceDriveFolderId: "{% $states.input.videoDriveFolderId %}",
+                  driveId: "{% $states.input.videoDriveId %}",
+                  jobId: "{% $states.input.jobId %}",
+                  videoFileId: "{% $states.input.videoFileId %}",
                 },
               },
               Retry: [
@@ -654,59 +577,49 @@ export default class VideoRender extends pulumi.ComponentResource {
       { parent: this },
     );
 
-    const apiGwExec = new aws.iam.Role(
-      `${name}-ApiGwExec`,
+    this.routes = [
       {
-        tags: args.meta.tags,
-        assumeRolePolicy: aws.iam.getPolicyDocumentOutput(
+        path: "/unstable/v2/video-render/reel",
+        method: "POST",
+        eventHandler: args.sparkLambda.lambda,
+        execRole: args.sparkApiGwExec,
+        requestTemplate: {
+          "application/json": pulumi.jsonStringify({
+            input: "$util.escapeJavaScript($input.json('$'))",
+            stateMachineArn: stateMachine.arn,
+            traceHeader: "$method.request.header.X-Amzn-Trace-Id",
+            apiKeyId: "$context.identity.apiKeyId",
+          }),
+        },
+      },
+    ];
+
+    const sparkPolicy = new aws.iam.Policy(
+      `${name}-SparkPolicy`,
+      {
+        policy: aws.iam.getPolicyDocumentOutput(
           {
             statements: [
               {
-                effect: "Allow",
-                principals: [
-                  {
-                    type: "Service",
-                    identifiers: ["apigateway.amazonaws.com"],
-                  },
-                ],
-                actions: ["sts:AssumeRole"],
+                actions: ["states:StartExecution", "states:StartSyncExecution"],
+                resources: [stateMachine.arn],
               },
             ],
           },
           { parent: this },
         ).json,
-        inlinePolicies: [
-          {
-            policy: aws.iam.getPolicyDocumentOutput(
-              {
-                statements: [
-                  {
-                    actions: [
-                      "states:StartExecution",
-                      "states:StopExecution",
-                      "states:StartSyncExecution",
-                    ],
-                    resources: [stateMachine.arn],
-                  },
-                ],
-              },
-              { parent: this },
-            ).json,
-          },
-        ],
       },
       { parent: this },
     );
 
-    this.routes = [
+    new aws.iam.PolicyAttachment(
+      `${name}-SparkPolicy`,
       {
-        path: "/unstable/v2/video-render/reel",
-        method: "POST",
-        eventHandler: stateMachine,
-        execRole: apiGwExec,
+        roles: [args.sparkLambda.role],
+        policyArn: sparkPolicy.arn,
       },
-    ];
-
+      { parent: this },
+    );
     this.registerOutputs({
       routes: this.routes,
     });

@@ -13,6 +13,8 @@ export interface DMQsProps {
   gcpConfigParam: aws.ssm.Parameter;
   sparkLambda: GoLambda;
   otpLambda: GoLambda;
+  sparkApiGwExec: aws.iam.Role;
+  sfnExec: aws.iam.Role;
 }
 
 export class DMQs extends pulumi.ComponentResource {
